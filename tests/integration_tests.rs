@@ -1,6 +1,6 @@
 use file_identify::{
-    file_is_text, parse_shebang_from_file, tags_from_filename, tags_from_interpreter,
-    tags_from_path, ShebangTuple,
+    ShebangTuple, file_is_text, parse_shebang_from_file, tags_from_filename, tags_from_interpreter,
+    tags_from_path,
 };
 use std::collections::HashSet;
 use std::fs;
@@ -189,7 +189,7 @@ fn test_shebang_with_arguments() {
 
     let components = parse_shebang_from_file(&script_path).unwrap();
     assert_eq!(components, shebang_tuple!["python3", "-u"]);
-    
+
     // Test that the first component converts to expected tags
     let tags = tags_from_interpreter(&components[0]);
     assert!(tags.contains("python"));

@@ -1,5 +1,5 @@
-use std::collections::HashSet;
 use once_cell::sync::Lazy;
+use std::collections::HashSet;
 
 pub const DIRECTORY: &str = "directory";
 pub const SYMLINK: &str = "symlink";
@@ -18,7 +18,8 @@ pub fn tags_from_array(tags: &[&'static str]) -> TagSet {
     tags.iter().cloned().collect()
 }
 
-pub static TYPE_TAGS: Lazy<TagSet> = Lazy::new(|| HashSet::from([DIRECTORY, FILE, SYMLINK, SOCKET]));
+pub static TYPE_TAGS: Lazy<TagSet> =
+    Lazy::new(|| HashSet::from([DIRECTORY, FILE, SYMLINK, SOCKET]));
 pub static MODE_TAGS: Lazy<TagSet> = Lazy::new(|| HashSet::from([EXECUTABLE, NON_EXECUTABLE]));
 pub static ENCODING_TAGS: Lazy<TagSet> = Lazy::new(|| HashSet::from([BINARY, TEXT]));
 

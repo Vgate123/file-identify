@@ -1,4 +1,4 @@
-use file_identify::{parse_shebang_from_file, tags_from_interpreter, parse_shebang, ShebangTuple};
+use file_identify::{ShebangTuple, parse_shebang, parse_shebang_from_file, tags_from_interpreter};
 use std::collections::HashSet;
 use std::fs;
 use std::io::Cursor;
@@ -19,31 +19,39 @@ macro_rules! shebang_tuple {
 fn test_parse_shebang_from_file_python_compatibility() {
     let test_cases = vec![
         ("#!/usr/bin/env python3", 0o755, shebang_tuple!["python3"]),
-        ("#!/bin/bash", 0o755, shebang_tuple!["/bin/bash"]), 
+        ("#!/bin/bash", 0o755, shebang_tuple!["/bin/bash"]),
         ("#!/usr/bin/env node", 0o755, shebang_tuple!["node"]),
         ("#!/bin/sh", 0o755, shebang_tuple!["/bin/sh"]),
-        ("#!/usr/bin/python", 0o755, shebang_tuple!["/usr/bin/python"]),
-        ("#!/usr/bin/env -S python -u", 0o755, shebang_tuple!["python", "-u"]),
+        (
+            "#!/usr/bin/python",
+            0o755,
+            shebang_tuple!["/usr/bin/python"],
+        ),
+        (
+            "#!/usr/bin/env -S python -u",
+            0o755,
+            shebang_tuple!["python", "-u"],
+        ),
         ("#!/usr/bin/env", 0o755, shebang_tuple!()),
         ("#!/usr/bin/env -S", 0o755, shebang_tuple!()),
-        ("print('no shebang')", 0o755, shebang_tuple!()),  // No shebang but executable
+        ("print('no shebang')", 0o755, shebang_tuple!()), // No shebang but executable
         ("#!/usr/bin/env python3", 0o644, shebang_tuple!()), // Shebang but non-executable
     ];
-    
+
     for (shebang, mode, expected) in test_cases {
         let mut temp_file = NamedTempFile::new().unwrap();
         writeln!(temp_file, "{}", shebang).unwrap();
         writeln!(temp_file, "# test content").unwrap();
-        
+
         let temp_path = temp_file.path();
-        
+
         // Set permissions
         let mut perms = fs::metadata(temp_path).unwrap().permissions();
         perms.set_mode(mode);
         fs::set_permissions(temp_path, perms).unwrap();
-        
+
         let result = parse_shebang_from_file(temp_path).unwrap();
-        
+
         assert_eq!(
             result, expected,
             "Failed for shebang '{}' with mode {:o}",
@@ -73,13 +81,13 @@ fn test_tags_from_interpreter_python_compatibility() {
         ("php7", vec!["php", "php7"]),
         ("php8", vec!["php", "php8"]),
         ("unknown-interpreter", vec![]),
-        ("", vec![]),  // Edge case
+        ("", vec![]), // Edge case
     ];
-    
+
     for (interpreter, expected_vec) in test_cases {
         let result = tags_from_interpreter(interpreter);
         let expected: HashSet<&str> = expected_vec.into_iter().collect();
-        
+
         assert_eq!(
             result, expected,
             "Failed for interpreter '{}': expected {:?}, got {:?}",
@@ -91,21 +99,22 @@ fn test_tags_from_interpreter_python_compatibility() {
 #[test]
 fn test_parse_shebang_edge_cases_python_compatibility() {
     let malformed_cases = vec![
-        "#! ",  // Shebang with just space
-        "#!",   // Shebang with nothing
-        "#!/usr/bin/env\t\t",  // Shebang with tabs
-        "#!/usr/bin/env\n",    // Shebang with immediate newline
-        "#!/usr/bin/\x00binary",  // Shebang with null byte (will fail UTF-8 check)
+        "#! ",                   // Shebang with just space
+        "#!",                    // Shebang with nothing
+        "#!/usr/bin/env\t\t",    // Shebang with tabs
+        "#!/usr/bin/env\n",      // Shebang with immediate newline
+        "#!/usr/bin/\x00binary", // Shebang with null byte (will fail UTF-8 check)
     ];
-    
+
     for shebang in malformed_cases {
         let result = parse_shebang(Cursor::new(shebang.as_bytes())).unwrap();
-        
+
         // All malformed shebangs should return empty vector
         assert!(
             result.is_empty(),
             "Malformed shebang '{}' should return empty vector, got {:?}",
-            shebang.escape_debug(), result
+            shebang.escape_debug(),
+            result
         );
     }
 }
@@ -113,16 +122,19 @@ fn test_parse_shebang_edge_cases_python_compatibility() {
 #[test]
 fn test_specific_python_behaviors() {
     // Test specific Python identify behaviors that must match exactly
-    
+
     // Test env handling
     let env_cases = vec![
         ("#!/usr/bin/env python3", shebang_tuple!["python3"]),
-        ("#!/usr/bin/env -S python3 -u", shebang_tuple!["python3", "-u"]),
+        (
+            "#!/usr/bin/env -S python3 -u",
+            shebang_tuple!["python3", "-u"],
+        ),
         ("#!/usr/bin/env -S python3", shebang_tuple!["python3"]),
         ("#!/usr/bin/env", shebang_tuple!()),
         ("#!/usr/bin/env -S", shebang_tuple!()),
     ];
-    
+
     for (shebang, expected) in env_cases {
         let result = parse_shebang(Cursor::new(shebang.as_bytes())).unwrap();
         assert_eq!(
@@ -131,7 +143,7 @@ fn test_specific_python_behaviors() {
             shebang, expected, result
         );
     }
-    
+
     // Test interpreter versioning
     let version_cases = vec![
         ("python3", vec!["python", "python3"]),
@@ -141,18 +153,18 @@ fn test_specific_python_behaviors() {
         ("php7", vec!["php", "php7"]),
         ("php8", vec!["php", "php8"]),
     ];
-    
+
     for (interpreter, expected_vec) in version_cases {
         let result = tags_from_interpreter(interpreter);
         let expected: HashSet<&str> = expected_vec.into_iter().collect();
-        
+
         assert_eq!(
             result, expected,
             "Version handling failed for '{}': expected {:?}, got {:?}",
             interpreter, expected, result
         );
     }
-    
+
     // Test path stripping
     let path_cases = vec![
         ("/usr/bin/python", vec!["python"]),
@@ -160,11 +172,11 @@ fn test_specific_python_behaviors() {
         ("/usr/local/bin/node", vec!["javascript"]), // node -> javascript
         ("ruby", vec!["ruby"]),
     ];
-    
+
     for (interpreter, expected_vec) in path_cases {
         let result = tags_from_interpreter(interpreter);
         let expected: HashSet<&str> = expected_vec.into_iter().collect();
-        
+
         assert_eq!(
             result, expected,
             "Path stripping failed for '{}': expected {:?}, got {:?}",
@@ -177,21 +189,22 @@ fn test_specific_python_behaviors() {
 fn test_ascii_printable_requirement() {
     // Python requires only printable ASCII in shebang lines
     let non_printable_cases: Vec<&[u8]> = vec![
-        b"#!/usr/bin/python\x01",  // Control character
-        b"#!/usr/bin/python\x7f",  // DEL character
-        b"#!/usr/bin/python\xff",  // Non-ASCII
-        b"#!/usr/bin/python\x00",  // Null
+        b"#!/usr/bin/python\x01", // Control character
+        b"#!/usr/bin/python\x7f", // DEL character
+        b"#!/usr/bin/python\xff", // Non-ASCII
+        b"#!/usr/bin/python\x00", // Null
     ];
-    
+
     for shebang_bytes in non_printable_cases {
         let result = parse_shebang(Cursor::new(shebang_bytes)).unwrap();
         assert!(
             result.is_empty(),
             "Non-printable shebang should return empty: '{:?}', got {:?}",
-            shebang_bytes, result
+            shebang_bytes,
+            result
         );
     }
-    
+
     // Valid printable ASCII should work
     let result = parse_shebang(Cursor::new(b"#!/usr/bin/python")).unwrap();
     assert_eq!(result, shebang_tuple!["/usr/bin/python"]);
@@ -211,11 +224,20 @@ fn test_comprehensive_real_world_cases() {
         ("#!/usr/bin/env ruby", shebang_tuple!["ruby"]),
         ("#!/usr/bin/env perl", shebang_tuple!["perl"]),
         ("#!/usr/bin/env php", shebang_tuple!["php"]),
-        ("#!/usr/bin/env -S python3 -u", shebang_tuple!["python3", "-u"]),
-        ("#!/usr/bin/env -S python3 -O", shebang_tuple!["python3", "-O"]),
-        ("#!/usr/bin/env -S node --experimental-modules", shebang_tuple!["node", "--experimental-modules"]),
+        (
+            "#!/usr/bin/env -S python3 -u",
+            shebang_tuple!["python3", "-u"],
+        ),
+        (
+            "#!/usr/bin/env -S python3 -O",
+            shebang_tuple!["python3", "-O"],
+        ),
+        (
+            "#!/usr/bin/env -S node --experimental-modules",
+            shebang_tuple!["node", "--experimental-modules"],
+        ),
     ];
-    
+
     for (shebang, expected) in real_world_cases {
         let result = parse_shebang(Cursor::new(shebang.as_bytes())).unwrap();
         assert_eq!(
