@@ -15,12 +15,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Binary size**: Optimized with PHF compile-time hash generation
 - **Startup**: Zero runtime hash computation for all file type lookups
 
+### Fixed
+- Improved code formatting and applied clippy suggestions for better code quality
+
 ### Technical Details
 - Converted 315+ file extension mappings to PHF
 - Converted 22 interpreter mappings to PHF  
 - Converted 130+ special filename mappings to PHF
 - Maintained 100% API compatibility and functionality
-- All 78 tests continue to pass with identical behavior
+- All tests continue to pass with identical behavior
 
 ## [0.1.1] - 2025-08-08
 
