@@ -116,7 +116,7 @@ impl ShebangTuple {
     }
 
     /// Iterate over the components (equivalent to Python's `for item in tuple`)
-    pub fn iter(&self) -> std::slice::Iter<String> {
+    pub fn iter(&self) -> std::slice::Iter<'_, String> {
         self.components.iter()
     }
 
