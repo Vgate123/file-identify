@@ -1,0 +1,29 @@
+[package]
+name = "file-identify"
+version = "0.1.0"
+edition = "2024"
+authors = ["Serhii Kaliuzhnyi <https://github.com/grok-rs>"]
+description = "File identification library for Rust - detects file types based on extensions, shebangs, and content"
+documentation = "https://docs.rs/file-identify"
+readme = "README.md"
+repository = "https://github.com/pre-commit/identify"
+license = "MIT"
+keywords = ["file", "identification", "detection", "filetype", "mime"]
+categories = ["filesystem", "command-line-utilities"]
+rust-version = "1.70"
+exclude = ["tests/fixtures/**/*"]
+
+[[bin]]
+name = "file-identify"
+path = "src/bin/main.rs"
+
+
+[dependencies]
+clap = { version = "4.0", features = ["derive"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+lazy_static = "1.4"
+
+[dev-dependencies]
+tempfile = "3.8"
+
