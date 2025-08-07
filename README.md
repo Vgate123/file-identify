@@ -25,7 +25,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-file-identify = "0.1"
+file-identify = "0.1.1"
 ```
 
 ## Usage
