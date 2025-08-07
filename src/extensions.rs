@@ -1,10 +1,10 @@
-use std::collections::{HashMap, HashSet};
 use crate::tags::TagSet;
+use std::collections::{HashMap, HashSet};
 
 lazy_static::lazy_static! {
     pub static ref EXTENSIONS: HashMap<&'static str, TagSet> = {
         let mut map = HashMap::new();
-        
+
         map.insert("adoc", HashSet::from(["text", "asciidoc"]));
         map.insert("ai", HashSet::from(["binary", "adobe-illustrator"]));
         map.insert("aj", HashSet::from(["text", "aspectj"]));
@@ -333,19 +333,19 @@ lazy_static::lazy_static! {
 
     pub static ref NAMES: HashMap<&'static str, TagSet> = {
         let mut map = HashMap::new();
-        
+
         // Helper function to merge sets
         let merge = |base: &[&'static str], additional: &[&'static str]| -> TagSet {
             base.iter().cloned().chain(additional.iter().cloned()).collect()
         };
-        
+
         // YAML-based configs
         map.insert(".ansible-lint", HashSet::from(["text", "yaml"]));
         map.insert(".clang-format", HashSet::from(["text", "yaml"]));
         map.insert(".clang-tidy", HashSet::from(["text", "yaml"]));
         map.insert(".salt-lint", merge(&["text", "yaml"], &["salt-lint"]));
         map.insert(".yamllint", merge(&["text", "yaml"], &["yamllint"]));
-        
+
         // JSON-based configs
         map.insert(".babelrc", merge(&["text", "json"], &["babelrc"]));
         map.insert(".bowerrc", merge(&["text", "json"], &["bowerrc"]));
@@ -363,7 +363,7 @@ lazy_static::lazy_static! {
         map.insert(".prettierrc.yaml", HashSet::from(["text", "yaml"]));
         map.insert(".prettierrc.yml", HashSet::from(["text", "yaml"]));
         map.insert(".stylintrc", HashSet::from(["text", "json"]));
-        
+
         // Shell configs
         map.insert(".bash_aliases", HashSet::from(["text", "shell", "bash"]));
         map.insert(".bash_profile", HashSet::from(["text", "shell", "bash"]));
@@ -376,7 +376,7 @@ lazy_static::lazy_static! {
         map.insert(".zshrc", HashSet::from(["text", "shell", "zsh"]));
         map.insert(".zshenv", HashSet::from(["text", "shell", "zsh"]));
         map.insert("direnvrc", HashSet::from(["text", "shell", "bash"]));
-        
+
         // INI-based configs
         map.insert(".codespellrc", merge(&["text", "ini"], &["codespellrc"]));
         map.insert(".coveragerc", merge(&["text", "ini"], &["coveragerc"]));
@@ -390,7 +390,7 @@ lazy_static::lazy_static! {
         map.insert(".sqlfluff", HashSet::from(["text", "ini"]));
         map.insert("pylintrc", merge(&["text", "ini"], &["pylintrc"]));
         map.insert("setup.cfg", HashSet::from(["text", "ini"]));
-        
+
         // Git files
         map.insert(".dockerignore", HashSet::from(["text", "dockerignore"]));
         map.insert(".gitattributes", HashSet::from(["text", "gitattributes"]));
@@ -398,14 +398,14 @@ lazy_static::lazy_static! {
         map.insert(".gitmodules", HashSet::from(["text", "gitmodules"]));
         map.insert(".npmignore", HashSet::from(["text", "npmignore"]));
         map.insert(".prettierignore", HashSet::from(["text", "gitignore", "prettierignore"]));
-        
+
         // Special files
         map.insert(".bazelrc", HashSet::from(["text", "bazelrc"]));
         map.insert(".browserslistrc", HashSet::from(["text", "browserslistrc"]));
         map.insert(".editorconfig", HashSet::from(["text", "editorconfig"]));
         map.insert(".mailmap", HashSet::from(["text", "mailmap"]));
         map.insert(".pdbrc", merge(&["text", "python"], &["pdbrc"]));
-        
+
         // Build files
         map.insert("BUILD", HashSet::from(["text", "bazel"]));
         map.insert("BUILD.bazel", HashSet::from(["text", "bazel"]));
@@ -420,7 +420,7 @@ lazy_static::lazy_static! {
         map.insert("WORKSPACE", HashSet::from(["text", "bazel"]));
         map.insert("WORKSPACE.bazel", HashSet::from(["text", "bazel"]));
         map.insert("copy.bara.sky", HashSet::from(["text", "bazel"]));
-        
+
         // Package files
         map.insert("Cargo.toml", merge(&["text", "toml"], &["cargo"]));
         map.insert("Cargo.lock", merge(&["text", "toml"], &["cargo-lock"]));
@@ -435,23 +435,23 @@ lazy_static::lazy_static! {
         map.insert("poetry.lock", HashSet::from(["text", "toml"]));
         map.insert("pom.xml", HashSet::from(["pom", "text", "xml"]));
         map.insert("yarn.lock", HashSet::from(["text", "yaml"]));
-        
+
         // Ruby files
         map.insert("config.ru", HashSet::from(["text", "ruby"]));
         map.insert("Gemfile", HashSet::from(["text", "ruby"]));
         map.insert("Gemfile.lock", HashSet::from(["text"]));
         map.insert("Rakefile", HashSet::from(["text", "ruby"]));
         map.insert("Vagrantfile", HashSet::from(["text", "ruby"]));
-        
+
         // Bitbake files
         map.insert("bblayers.conf", HashSet::from(["text", "bitbake"]));
         map.insert("bitbake.conf", HashSet::from(["text", "bitbake"]));
-        
+
         // Erlang files
         map.insert("rebar.config", HashSet::from(["text", "erlang"]));
         map.insert("sys.config", HashSet::from(["text", "erlang"]));
         map.insert("sys.config.src", HashSet::from(["text", "erlang"]));
-        
+
         // Documentation and misc
         map.insert("AUTHORS", HashSet::from(["text", "plain-text"]));
         map.insert("CHANGELOG", HashSet::from(["text", "plain-text"]));
@@ -463,7 +463,7 @@ lazy_static::lazy_static! {
         map.insert("NOTICE", HashSet::from(["text", "plain-text"]));
         map.insert("PATENTS", HashSet::from(["text", "plain-text"]));
         map.insert("README", HashSet::from(["text", "plain-text"]));
-        
+
         // Special build/config files
         map.insert("Jenkinsfile", HashSet::from(["text", "groovy", "jenkins"]));
         map.insert("PKGBUILD", HashSet::from(["text", "bash", "pkgbuild", "alpm"]));

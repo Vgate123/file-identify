@@ -6,11 +6,11 @@ authors = ["Serhii Kaliuzhnyi <https://github.com/grok-rs>"]
 description = "File identification library for Rust - detects file types based on extensions, shebangs, and content"
 documentation = "https://docs.rs/file-identify"
 readme = "README.md"
-repository = "https://github.com/pre-commit/identify"
+repository = "https://github.com/grok-rs/file-identify"
 license = "MIT"
 keywords = ["file", "identification", "detection", "filetype", "mime"]
 categories = ["filesystem", "command-line-utilities"]
-rust-version = "1.70"
+rust-version = "1.85.0"
 exclude = ["tests/fixtures/**/*"]
 
 [[bin]]

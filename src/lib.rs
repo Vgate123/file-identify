@@ -51,13 +51,13 @@ use std::fs;
 use std::io::{BufRead, BufReader, Read};
 use std::path::Path;
 
-pub mod tags;
 pub mod extensions;
 pub mod interpreters;
+pub mod tags;
 
-use tags::*;
 use extensions::{EXTENSIONS, EXTENSIONS_NEED_BINARY_CHECK, NAMES};
 use interpreters::INTERPRETERS;
+use tags::*;
 
 /// Result type for file identification operations.
 ///
@@ -77,8 +77,8 @@ pub enum IdentifyError {
 impl std::fmt::Display for IdentifyError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            IdentifyError::PathNotFound(path) => write!(f, "{} does not exist.", path),
-            IdentifyError::IoError(err) => write!(f, "IO error: {}", err),
+            IdentifyError::PathNotFound(path) => write!(f, "{path} does not exist."),
+            IdentifyError::IoError(err) => write!(f, "IO error: {err}"),
         }
     }
 }
@@ -133,21 +133,21 @@ impl From<std::io::Error> for IdentifyError {
 pub fn tags_from_path<P: AsRef<Path>>(path: P) -> Result<TagSet> {
     let path = path.as_ref();
     let path_str = path.to_string_lossy();
-    
+
     let metadata = match fs::symlink_metadata(path) {
         Ok(meta) => meta,
         Err(_) => return Err(Box::new(IdentifyError::PathNotFound(path_str.to_string()))),
     };
 
     let file_type = metadata.file_type();
-    
+
     if file_type.is_dir() {
         return Ok([DIRECTORY].iter().cloned().collect());
     }
     if file_type.is_symlink() {
         return Ok([SYMLINK].iter().cloned().collect());
     }
-    
+
     // Check for socket (Unix-specific)
     #[cfg(unix)]
     {
@@ -252,7 +252,7 @@ pub fn tags_from_filename(filename: &str) -> TagSet {
     // Check file extension
     if let Some(ext) = Path::new(filename).extension().and_then(|e| e.to_str()) {
         let ext_lower = ext.to_lowercase();
-        
+
         if let Some(ext_tags) = EXTENSIONS.get(ext_lower.as_str()) {
             tags.extend(ext_tags.iter().cloned());
         } else if let Some(ext_tags) = EXTENSIONS_NEED_BINARY_CHECK.get(ext_lower.as_str()) {
@@ -296,15 +296,15 @@ pub fn tags_from_filename(filename: &str) -> TagSet {
 /// ```
 pub fn tags_from_interpreter(interpreter: &str) -> TagSet {
     // Extract the interpreter name from the path
-    let interpreter_name = interpreter.split('/').last().unwrap_or(interpreter);
-    
+    let interpreter_name = interpreter.split('/').next_back().unwrap_or(interpreter);
+
     // Try progressively shorter versions (e.g., "python3.5.2" -> "python3.5" -> "python3")
     let mut current = interpreter_name;
     while !current.is_empty() {
         if let Some(tags) = INTERPRETERS.get(current) {
             return tags.clone();
         }
-        
+
         // Try removing the last dot-separated part
         match current.rfind('.') {
             Some(pos) => current = &current[..pos],
@@ -381,16 +381,20 @@ pub fn file_is_text<P: AsRef<Path>>(path: P) -> Result<bool> {
 pub fn is_text<R: Read>(mut reader: R) -> Result<bool> {
     let mut buffer = [0; 1024];
     let bytes_read = reader.read(&mut buffer)?;
-    
+
     // Check for null bytes or other non-text indicators
     let text_chars: HashSet<u8> = [
-        7, 8, 9, 10, 11, 12, 13, 27  // Control chars
-    ].iter().cloned()
-    .chain(0x20..0x7F)  // ASCII printable
+        7, 8, 9, 10, 11, 12, 13, 27, // Control chars
+    ]
+    .iter()
+    .cloned()
+    .chain(0x20..0x7F) // ASCII printable
     .chain(0x80..=0xFF) // Extended ASCII
     .collect();
 
-    let is_text = buffer[..bytes_read].iter().all(|&byte| text_chars.contains(&byte));
+    let is_text = buffer[..bytes_read]
+        .iter()
+        .all(|&byte| text_chars.contains(&byte));
     Ok(is_text)
 }
 
@@ -434,7 +438,7 @@ pub fn is_text<R: Read>(mut reader: R) -> Result<bool> {
 /// ```
 pub fn parse_shebang_from_file<P: AsRef<Path>>(path: P) -> Result<TagSet> {
     let path = path.as_ref();
-    
+
     // Only check executable files
     let metadata = fs::metadata(path)?;
     #[cfg(unix)]
@@ -489,7 +493,7 @@ pub fn parse_shebang<R: Read>(reader: R) -> Result<TagSet> {
 
     // Remove the #! and clean up the line
     let shebang_line = first_line[2..].trim();
-    
+
     // Parse the shebang command
     let parts: Vec<&str> = shebang_line.split_whitespace().collect();
     if parts.is_empty() {
@@ -511,17 +515,17 @@ pub fn parse_shebang<R: Read>(reader: R) -> Result<TagSet> {
     }
 
     // Extract interpreter name and get tags
-    let interpreter = cmd[0].split('/').last().unwrap_or(cmd[0]);
+    let interpreter = cmd[0].split('/').next_back().unwrap_or(cmd[0]);
     Ok(tags_from_interpreter(interpreter))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Cursor;
-    use tempfile::{tempdir, NamedTempFile};
     use std::fs;
+    use std::io::Cursor;
     use std::os::unix::fs::PermissionsExt;
+    use tempfile::{NamedTempFile, tempdir};
 
     // Test tag system completeness
     #[test]
@@ -710,7 +714,7 @@ mod tests {
     fn test_tags_from_path_regular_file() {
         let file = NamedTempFile::new().unwrap();
         fs::write(&file, "print('hello')").unwrap();
-        
+
         let tags = tags_from_path(file.path()).unwrap();
         assert!(tags.contains("file"));
         assert!(tags.contains("non-executable"));
@@ -722,11 +726,11 @@ mod tests {
         let dir = tempdir().unwrap();
         let script_path = dir.path().join("script.py");
         fs::write(&script_path, "#!/usr/bin/env python3\nprint('hello')").unwrap();
-        
+
         let mut perms = fs::metadata(&script_path).unwrap().permissions();
         perms.set_mode(0o755);
         fs::set_permissions(&script_path, perms).unwrap();
-        
+
         let tags = tags_from_path(&script_path).unwrap();
         assert!(tags.contains("file"));
         assert!(tags.contains("executable"));
@@ -746,7 +750,7 @@ mod tests {
         let dir = tempdir().unwrap();
         let binary_path = dir.path().join("binary");
         fs::write(&binary_path, &[0x7f, 0x45, 0x4c, 0x46, 0x02, 0x01, 0x01]).unwrap();
-        
+
         let tags = tags_from_path(&binary_path).unwrap();
         assert!(tags.contains("file"));
         assert!(tags.contains("binary"));
@@ -772,14 +776,14 @@ mod tests {
     fn test_plist_binary_detection() {
         let dir = tempdir().unwrap();
         let plist_path = dir.path().join("test.plist");
-        
+
         // Binary plist
         let binary_plist = [
             0x62, 0x70, 0x6c, 0x69, 0x73, 0x74, 0x30, 0x30, // "bplist00"
             0xd1, 0x01, 0x02, 0x5f, 0x10, 0x0f,
         ];
         fs::write(&plist_path, &binary_plist).unwrap();
-        
+
         let tags = tags_from_path(&plist_path).unwrap();
         assert!(tags.contains("plist"));
         assert!(tags.contains("binary"));
@@ -789,7 +793,7 @@ mod tests {
     fn test_plist_text_detection() {
         let dir = tempdir().unwrap();
         let plist_path = dir.path().join("test.plist");
-        
+
         let text_plist = r#"<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -799,7 +803,7 @@ mod tests {
 </dict>
 </plist>"#;
         fs::write(&plist_path, text_plist).unwrap();
-        
+
         let tags = tags_from_path(&plist_path).unwrap();
         assert!(tags.contains("plist"));
         assert!(tags.contains("text"));
@@ -811,7 +815,7 @@ mod tests {
         let dir = tempdir().unwrap();
         let empty_path = dir.path().join("empty");
         fs::write(&empty_path, "").unwrap();
-        
+
         let tags = tags_from_path(&empty_path).unwrap();
         assert!(tags.contains("file"));
         assert!(tags.contains("text")); // Empty files are considered text
@@ -831,7 +835,7 @@ mod tests {
         assert!(tags.contains("gzip"));
     }
 
-    // Additional comprehensive tests from Python version  
+    // Additional comprehensive tests from Python version
     #[test]
     fn test_comprehensive_shebang_parsing() {
         let test_cases = vec![
@@ -839,7 +843,7 @@ mod tests {
             ("#!/usr/bin/python", vec!["python"]),
             ("#!/usr/bin/env python", vec!["python"]),
             ("#! /usr/bin/python", vec!["python"]),
-            ("#!/usr/bin/foo  python", vec![]),  // "foo" not recognized
+            ("#!/usr/bin/foo  python", vec![]), // "foo" not recognized
             ("#!/usr/bin/env -S python -u", vec!["python"]),
             ("#!/usr/bin/env", vec![]),
             ("#!/usr/bin/env -S", vec![]),

@@ -1,10 +1,10 @@
-use std::collections::{HashMap, HashSet};
 use crate::tags::TagSet;
+use std::collections::{HashMap, HashSet};
 
 lazy_static::lazy_static! {
     pub static ref INTERPRETERS: HashMap<&'static str, TagSet> = {
         let mut map = HashMap::new();
-        
+
         map.insert("ash", HashSet::from(["shell", "ash"]));
         map.insert("awk", HashSet::from(["awk"]));
         map.insert("bash", HashSet::from(["shell", "bash"]));

@@ -117,6 +117,20 @@ cargo install cargo-tarpaulin
 cargo tarpaulin --out html
 ```
 
+### Releasing
+
+To create a new release:
+
+1. Update version in `Cargo.toml`
+2. Update `CHANGELOG.md` with new version notes
+3. Commit changes: `git commit -am "Bump version to x.y.z"`
+4. Create and push tag: `git tag vx.y.z && git push origin vx.y.z`
+
+The release workflow will automatically:
+- Run full test suite
+- Publish to crates.io using `RELEASE_TOKEN` secret
+- Create GitHub release with auto-generated notes
+
 ## License
 
 MIT

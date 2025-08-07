@@ -1,4 +1,7 @@
-use file_identify::{tags_from_path, tags_from_filename, tags_from_interpreter, file_is_text, parse_shebang_from_file};
+use file_identify::{
+    file_is_text, parse_shebang_from_file, tags_from_filename, tags_from_interpreter,
+    tags_from_path,
+};
 use std::collections::HashSet;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
@@ -8,14 +11,14 @@ use tempfile::tempdir;
 #[test]
 fn test_comprehensive_file_scenarios() {
     let dir = tempdir().unwrap();
-    
+
     // Test Python file
     let py_path = dir.path().join("test.py");
     fs::write(&py_path, "#!/usr/bin/env python3\nprint('hello')").unwrap();
     let mut perms = fs::metadata(&py_path).unwrap().permissions();
     perms.set_mode(0o755);
     fs::set_permissions(&py_path, perms).unwrap();
-    
+
     let tags = tags_from_path(&py_path).unwrap();
     assert!(tags.contains("file"));
     assert!(tags.contains("executable"));
@@ -25,7 +28,7 @@ fn test_comprehensive_file_scenarios() {
     // Test non-executable Python file
     let py_ne_path = dir.path().join("module.py");
     fs::write(&py_ne_path, "def hello(): pass").unwrap();
-    
+
     let tags = tags_from_path(&py_ne_path).unwrap();
     assert!(tags.contains("file"));
     assert!(tags.contains("non-executable"));
@@ -47,8 +50,13 @@ fn test_special_filenames() {
     for (filename, expected_tags) in test_cases {
         let tags = tags_from_filename(filename);
         for expected in expected_tags {
-            assert!(tags.contains(expected), 
-                "File '{}' should contain tag '{}', got: {:?}", filename, expected, tags);
+            assert!(
+                tags.contains(expected),
+                "File '{}' should contain tag '{}', got: {:?}",
+                filename,
+                expected,
+                tags
+            );
         }
     }
 }
@@ -56,12 +64,12 @@ fn test_special_filenames() {
 #[test]
 fn test_binary_vs_text_detection() {
     let dir = tempdir().unwrap();
-    
+
     // Create text file
     let text_path = dir.path().join("text.txt");
     fs::write(&text_path, "Hello, world! 🌍").unwrap();
     assert!(file_is_text(&text_path).unwrap());
-    
+
     // Create binary file (ELF header)
     let binary_path = dir.path().join("binary");
     fs::write(&binary_path, &[0x7f, 0x45, 0x4c, 0x46, 0x02, 0x01, 0x01]).unwrap();
@@ -84,8 +92,13 @@ fn test_interpreter_parsing_edge_cases() {
     for (interpreter, expected) in test_cases {
         let tags = tags_from_interpreter(interpreter);
         for exp_tag in expected {
-            assert!(tags.contains(exp_tag), 
-                "Interpreter '{}' should contain '{}', got: {:?}", interpreter, exp_tag, tags);
+            assert!(
+                tags.contains(exp_tag),
+                "Interpreter '{}' should contain '{}', got: {:?}",
+                interpreter,
+                exp_tag,
+                tags
+            );
         }
     }
 }
@@ -96,7 +109,7 @@ fn test_extension_case_sensitivity() {
     let tags_lower = tags_from_filename("image.jpg");
     let tags_upper = tags_from_filename("image.JPG");
     let tags_mixed = tags_from_filename("image.JpG");
-    
+
     assert_eq!(tags_lower, tags_upper);
     assert_eq!(tags_lower, tags_mixed);
     assert!(tags_lower.contains("jpeg"));
@@ -108,10 +121,10 @@ fn test_extension_case_sensitivity() {
 fn test_socket_identification() {
     let dir = tempdir().unwrap();
     let socket_path = dir.path().join("test_socket");
-    
+
     // Create a Unix socket
     let _listener = UnixListener::bind(&socket_path).unwrap();
-    
+
     let tags = tags_from_path(&socket_path).unwrap();
     assert_eq!(tags, HashSet::from(["socket"]));
 }
@@ -121,10 +134,10 @@ fn test_symlink_identification() {
     let dir = tempdir().unwrap();
     let target_path = dir.path().join("target_file");
     let symlink_path = dir.path().join("symlink");
-    
+
     fs::write(&target_path, "target content").unwrap();
     std::os::unix::fs::symlink(&target_path, &symlink_path).unwrap();
-    
+
     let tags = tags_from_path(&symlink_path).unwrap();
     assert_eq!(tags, HashSet::from(["symlink"]));
 }
@@ -134,9 +147,9 @@ fn test_broken_symlink_identification() {
     let dir = tempdir().unwrap();
     let nonexistent_target = dir.path().join("nonexistent");
     let symlink_path = dir.path().join("broken_symlink");
-    
+
     std::os::unix::fs::symlink(&nonexistent_target, &symlink_path).unwrap();
-    
+
     let tags = tags_from_path(&symlink_path).unwrap();
     assert_eq!(tags, HashSet::from(["symlink"]));
 }
@@ -147,7 +160,7 @@ fn test_filename_precedence_over_extension() {
     let tags = tags_from_filename("setup.cfg");
     assert!(tags.contains("ini")); // From NAMES mapping
     assert!(tags.contains("text"));
-    
+
     let tags = tags_from_filename("random.cfg");
     assert!(tags.contains("text")); // Just from extension
     assert!(!tags.contains("ini")); // No special name mapping
@@ -156,14 +169,14 @@ fn test_filename_precedence_over_extension() {
 #[test]
 fn test_shebang_with_arguments() {
     let dir = tempdir().unwrap();
-    
+
     // Test shebang with -S flag
     let script_path = dir.path().join("script");
     fs::write(&script_path, "#!/usr/bin/env -S python3 -u\nprint('hello')").unwrap();
     let mut perms = fs::metadata(&script_path).unwrap().permissions();
     perms.set_mode(0o755);
     fs::set_permissions(&script_path, perms).unwrap();
-    
+
     let tags = parse_shebang_from_file(&script_path).unwrap();
     assert!(tags.contains("python"));
     assert!(tags.contains("python3"));
@@ -175,7 +188,7 @@ fn test_non_executable_shebang_ignored() {
     let script_path = dir.path().join("script");
     fs::write(&script_path, "#!/usr/bin/env python3\nprint('hello')").unwrap();
     // Don't make it executable
-    
+
     let tags = parse_shebang_from_file(&script_path).unwrap();
     assert!(tags.is_empty()); // Should be empty for non-executable files
 }
@@ -193,8 +206,13 @@ fn test_complex_filename_patterns() {
     for (filename, expected) in test_cases {
         let tags = tags_from_filename(filename);
         for exp_tag in expected {
-            assert!(tags.contains(exp_tag), 
-                "File '{}' should contain '{}', got: {:?}", filename, exp_tag, tags);
+            assert!(
+                tags.contains(exp_tag),
+                "File '{}' should contain '{}', got: {:?}",
+                filename,
+                exp_tag,
+                tags
+            );
         }
     }
 }

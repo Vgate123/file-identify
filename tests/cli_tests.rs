@@ -1,6 +1,6 @@
-use std::process::Command;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
+use std::process::Command;
 use tempfile::tempdir;
 
 fn get_cli_path() -> std::path::PathBuf {
@@ -24,7 +24,7 @@ fn test_cli_basic_usage() {
 
     assert!(output.status.success());
     let stdout = String::from_utf8(output.stdout).unwrap();
-    
+
     // Should be JSON array
     let tags: Vec<String> = serde_json::from_str(&stdout.trim()).unwrap();
     assert!(tags.contains(&"file".to_string()));
@@ -42,7 +42,7 @@ fn test_cli_filename_only() {
 
     assert!(output.status.success());
     let stdout = String::from_utf8(output.stdout).unwrap();
-    
+
     let tags: Vec<String> = serde_json::from_str(&stdout.trim()).unwrap();
     assert!(tags.contains(&"python".to_string()));
     assert!(tags.contains(&"text".to_string()));
@@ -59,7 +59,7 @@ fn test_cli_file_not_found() {
 
     assert!(!output.status.success());
     assert_eq!(output.status.code(), Some(1));
-    
+
     let stderr = String::from_utf8(output.stderr).unwrap();
     assert!(stderr.contains("does not exist"));
 }
@@ -73,7 +73,7 @@ fn test_cli_unrecognized_file() {
 
     assert!(!output.status.success());
     assert_eq!(output.status.code(), Some(1));
-    
+
     let stdout = String::from_utf8(output.stdout).unwrap();
     assert!(stdout.trim().is_empty());
 }
@@ -106,7 +106,7 @@ fn test_cli_version() {
 #[test]
 fn test_cli_directory() {
     let dir = tempdir().unwrap();
-    
+
     let output = Command::new(get_cli_path())
         .arg(dir.path().to_str().unwrap())
         .output()
@@ -114,7 +114,7 @@ fn test_cli_directory() {
 
     assert!(output.status.success());
     let stdout = String::from_utf8(output.stdout).unwrap();
-    
+
     let tags: Vec<String> = serde_json::from_str(&stdout.trim()).unwrap();
     assert_eq!(tags, vec!["directory"]);
 }
@@ -124,11 +124,11 @@ fn test_cli_executable_script() {
     let dir = tempdir().unwrap();
     let script_path = dir.path().join("script");
     fs::write(&script_path, "#!/bin/bash\necho hello").unwrap();
-    
+
     let mut perms = fs::metadata(&script_path).unwrap().permissions();
     perms.set_mode(0o755);
     fs::set_permissions(&script_path, perms).unwrap();
-    
+
     let output = Command::new(get_cli_path())
         .arg(script_path.to_str().unwrap())
         .output()
@@ -136,7 +136,7 @@ fn test_cli_executable_script() {
 
     assert!(output.status.success());
     let stdout = String::from_utf8(output.stdout).unwrap();
-    
+
     let tags: Vec<String> = serde_json::from_str(&stdout.trim()).unwrap();
     assert!(tags.contains(&"file".to_string()));
     assert!(tags.contains(&"executable".to_string()));
@@ -150,7 +150,7 @@ fn test_cli_binary_file() {
     let binary_path = dir.path().join("binary.exe");
     // ELF header
     fs::write(&binary_path, &[0x7f, 0x45, 0x4c, 0x46, 0x02, 0x01, 0x01]).unwrap();
-    
+
     let output = Command::new(get_cli_path())
         .arg(binary_path.to_str().unwrap())
         .output()
@@ -158,7 +158,7 @@ fn test_cli_binary_file() {
 
     assert!(output.status.success());
     let stdout = String::from_utf8(output.stdout).unwrap();
-    
+
     let tags: Vec<String> = serde_json::from_str(&stdout.trim()).unwrap();
     assert!(tags.contains(&"file".to_string()));
     assert!(tags.contains(&"binary".to_string()));
