@@ -1,475 +1,454 @@
-use crate::tags::TagSet;
-use std::collections::{HashMap, HashSet};
+use crate::tags::{TagSet, tags_from_array};
+use phf::phf_map;
 
-lazy_static::lazy_static! {
-    pub static ref EXTENSIONS: HashMap<&'static str, TagSet> = {
-        let mut map = HashMap::new();
+pub static EXTENSION_TAGS: phf::Map<&'static str, &'static [&'static str]> = phf_map! {
+    "adoc" => &["text", "asciidoc"],
+    "ai" => &["binary", "adobe-illustrator"],
+    "aj" => &["text", "aspectj"],
+    "asciidoc" => &["text", "asciidoc"],
+    "apinotes" => &["text", "apinotes"],
+    "asar" => &["binary", "asar"],
+    "asm" => &["text", "asm"],
+    "astro" => &["text", "astro"],
+    "avif" => &["binary", "image", "avif"],
+    "avsc" => &["text", "avro-schema"],
+    "bash" => &["text", "shell", "bash"],
+    "bat" => &["text", "batch"],
+    "bats" => &["text", "shell", "bash", "bats"],
+    "bazel" => &["text", "bazel"],
+    "bb" => &["text", "bitbake"],
+    "bbappend" => &["text", "bitbake"],
+    "bbclass" => &["text", "bitbake"],
+    "beancount" => &["text", "beancount"],
+    "bib" => &["text", "bib"],
+    "bmp" => &["binary", "image", "bitmap"],
+    "bz2" => &["binary", "bzip2"],
+    "bz3" => &["binary", "bzip3"],
+    "bzl" => &["text", "bazel"],
+    "c" => &["text", "c"],
+    "c++" => &["text", "c++"],
+    "c++m" => &["text", "c++"],
+    "cc" => &["text", "c++"],
+    "ccm" => &["text", "c++"],
+    "cfg" => &["text"],
+    "chs" => &["text", "c2hs"],
+    "cjs" => &["text", "javascript"],
+    "clj" => &["text", "clojure"],
+    "cljc" => &["text", "clojure"],
+    "cljs" => &["text", "clojure", "clojurescript"],
+    "cmake" => &["text", "cmake"],
+    "cnf" => &["text"],
+    "coffee" => &["text", "coffee"],
+    "conf" => &["text"],
+    "cpp" => &["text", "c++"],
+    "cppm" => &["text", "c++"],
+    "cr" => &["text", "crystal"],
+    "crt" => &["text", "pem"],
+    "cs" => &["text", "c#"],
+    "csproj" => &["text", "xml", "csproj", "msbuild"],
+    "csh" => &["text", "shell", "csh"],
+    "cson" => &["text", "cson"],
+    "css" => &["text", "css"],
+    "csv" => &["text", "csv"],
+    "csx" => &["text", "c#", "c#script"],
+    "cu" => &["text", "cuda"],
+    "cue" => &["text", "cue"],
+    "cuh" => &["text", "cuda"],
+    "cxx" => &["text", "c++"],
+    "cxxm" => &["text", "c++"],
+    "cylc" => &["text", "cylc"],
+    "dart" => &["text", "dart"],
+    "dbc" => &["text", "dbc"],
+    "def" => &["text", "def"],
+    "dll" => &["binary"],
+    "dtd" => &["text", "dtd"],
+    "ear" => &["binary", "zip", "jar"],
+    "edn" => &["text", "clojure", "edn"],
+    "ejs" => &["text", "ejs"],
+    "ejson" => &["text", "json", "ejson"],
+    "elm" => &["text", "elm"],
+    "env" => &["text", "dotenv"],
+    "eot" => &["binary", "eot"],
+    "eps" => &["binary", "eps"],
+    "erb" => &["text", "erb"],
+    "erl" => &["text", "erlang"],
+    "ex" => &["text", "elixir"],
+    "exe" => &["binary"],
+    "exs" => &["text", "elixir"],
+    "eyaml" => &["text", "yaml"],
+    "f03" => &["text", "fortran"],
+    "f08" => &["text", "fortran"],
+    "f90" => &["text", "fortran"],
+    "f95" => &["text", "fortran"],
+    "feature" => &["text", "gherkin"],
+    "fish" => &["text", "fish"],
+    "fits" => &["binary", "fits"],
+    "fs" => &["text", "f#"],
+    "fsproj" => &["text", "xml", "fsproj", "msbuild"],
+    "fsx" => &["text", "f#", "f#script"],
+    "gd" => &["text", "gdscript"],
+    "gemspec" => &["text", "ruby"],
+    "geojson" => &["text", "geojson", "json"],
+    "ggb" => &["binary", "zip", "ggb"],
+    "gif" => &["binary", "image", "gif"],
+    "gleam" => &["text", "gleam"],
+    "go" => &["text", "go"],
+    "gotmpl" => &["text", "gotmpl"],
+    "gpx" => &["text", "gpx", "xml"],
+    "graphql" => &["text", "graphql"],
+    "gradle" => &["text", "groovy"],
+    "groovy" => &["text", "groovy"],
+    "gyb" => &["text", "gyb"],
+    "gyp" => &["text", "gyp", "python"],
+    "gypi" => &["text", "gyp", "python"],
+    "gz" => &["binary", "gzip"],
+    "h" => &["text", "header", "c", "c++"],
+    "hbs" => &["text", "handlebars"],
+    "hcl" => &["text", "hcl"],
+    "hh" => &["text", "header", "c++"],
+    "hpp" => &["text", "header", "c++"],
+    "hrl" => &["text", "erlang"],
+    "hs" => &["text", "haskell"],
+    "htm" => &["text", "html"],
+    "html" => &["text", "html"],
+    "hxx" => &["text", "header", "c++"],
+    "icns" => &["binary", "icns"],
+    "ico" => &["binary", "icon"],
+    "ics" => &["text", "icalendar"],
+    "idl" => &["text", "idl"],
+    "idr" => &["text", "idris"],
+    "inc" => &["text", "inc"],
+    "ini" => &["text", "ini"],
+    "inl" => &["text", "inl", "c++"],
+    "ino" => &["text", "ino", "c++"],
+    "inx" => &["text", "xml", "inx"],
+    "ipynb" => &["text", "jupyter", "json"],
+    "ixx" => &["text", "c++"],
+    "j2" => &["text", "jinja"],
+    "jade" => &["text", "jade"],
+    "jar" => &["binary", "zip", "jar"],
+    "java" => &["text", "java"],
+    "jenkins" => &["text", "groovy", "jenkins"],
+    "jenkinsfile" => &["text", "groovy", "jenkins"],
+    "jinja" => &["text", "jinja"],
+    "jinja2" => &["text", "jinja"],
+    "jl" => &["text", "julia"],
+    "jpeg" => &["binary", "image", "jpeg"],
+    "jpg" => &["binary", "image", "jpeg"],
+    "js" => &["text", "javascript"],
+    "json" => &["text", "json"],
+    "jsonld" => &["text", "json", "jsonld"],
+    "jsonnet" => &["text", "jsonnet"],
+    "json5" => &["text", "json5"],
+    "jsx" => &["text", "jsx"],
+    "key" => &["text", "pem"],
+    "kml" => &["text", "kml", "xml"],
+    "kt" => &["text", "kotlin"],
+    "kts" => &["text", "kotlin"],
+    "lean" => &["text", "lean"],
+    "lektorproject" => &["text", "ini", "lektorproject"],
+    "less" => &["text", "less"],
+    "lfm" => &["text", "lazarus", "lazarus-form"],
+    "lhs" => &["text", "literate-haskell"],
+    "libsonnet" => &["text", "jsonnet"],
+    "lidr" => &["text", "idris"],
+    "liquid" => &["text", "liquid"],
+    "lpi" => &["text", "lazarus", "xml"],
+    "lpr" => &["text", "lazarus", "pascal"],
+    "lr" => &["text", "lektor"],
+    "lua" => &["text", "lua"],
+    "m" => &["text", "objective-c"],
+    "m4" => &["text", "m4"],
+    "magik" => &["text", "magik"],
+    "make" => &["text", "makefile"],
+    "manifest" => &["text", "manifest"],
+    "map" => &["text", "map"],
+    "markdown" => &["text", "markdown"],
+    "md" => &["text", "markdown"],
+    "mdx" => &["text", "mdx"],
+    "meson" => &["text", "meson"],
+    "metal" => &["text", "metal"],
+    "mib" => &["text", "mib"],
+    "mjs" => &["text", "javascript"],
+    "mk" => &["text", "makefile"],
+    "ml" => &["text", "ocaml"],
+    "mli" => &["text", "ocaml"],
+    "mm" => &["text", "c++", "objective-c++"],
+    "modulemap" => &["text", "modulemap"],
+    "mscx" => &["text", "xml", "musescore"],
+    "mscz" => &["binary", "zip", "musescore"],
+    "mustache" => &["text", "mustache"],
+    "myst" => &["text", "myst"],
+    "ngdoc" => &["text", "ngdoc"],
+    "nim" => &["text", "nim"],
+    "nims" => &["text", "nim"],
+    "nimble" => &["text", "nimble"],
+    "nix" => &["text", "nix"],
+    "njk" => &["text", "nunjucks"],
+    "otf" => &["binary", "otf"],
+    "p12" => &["binary", "p12"],
+    "pas" => &["text", "pascal"],
+    "patch" => &["text", "diff"],
+    "pdf" => &["binary", "pdf"],
+    "pem" => &["text", "pem"],
+    "php" => &["text", "php"],
+    "php4" => &["text", "php"],
+    "php5" => &["text", "php"],
+    "phtml" => &["text", "php"],
+    "pl" => &["text", "perl"],
+    "plantuml" => &["text", "plantuml"],
+    "pm" => &["text", "perl"],
+    "png" => &["binary", "image", "png"],
+    "po" => &["text", "pofile"],
+    "pom" => &["pom", "text", "xml"],
+    "pp" => &["text", "puppet"],
+    "prisma" => &["text", "prisma"],
+    "properties" => &["text", "java-properties"],
+    "props" => &["text", "xml", "msbuild"],
+    "proto" => &["text", "proto"],
+    "ps1" => &["text", "powershell"],
+    "psd1" => &["text", "powershell"],
+    "psm1" => &["text", "powershell"],
+    "pug" => &["text", "pug"],
+    "puml" => &["text", "plantuml"],
+    "purs" => &["text", "purescript"],
+    "pxd" => &["text", "cython"],
+    "pxi" => &["text", "cython"],
+    "py" => &["text", "python"],
+    "pyi" => &["text", "pyi"],
+    "pyproj" => &["text", "xml", "pyproj", "msbuild"],
+    "pyt" => &["text", "python"],
+    "pyx" => &["text", "cython"],
+    "pyz" => &["binary", "pyz"],
+    "pyzw" => &["binary", "pyz"],
+    "qml" => &["text", "qml"],
+    "r" => &["text", "r"],
+    "rake" => &["text", "ruby"],
+    "rb" => &["text", "ruby"],
+    "resx" => &["text", "resx", "xml"],
+    "rng" => &["text", "xml", "relax-ng"],
+    "rs" => &["text", "rust"],
+    "rst" => &["text", "rst"],
+    "s" => &["text", "asm"],
+    "sas" => &["text", "sas"],
+    "sass" => &["text", "sass"],
+    "sbt" => &["text", "sbt", "scala"],
+    "sc" => &["text", "scala"],
+    "scala" => &["text", "scala"],
+    "scm" => &["text", "scheme"],
+    "scss" => &["text", "scss"],
+    "sh" => &["text", "shell"],
+    "sln" => &["text", "sln"],
+    "sls" => &["text", "salt"],
+    "so" => &["binary"],
+    "sol" => &["text", "solidity"],
+    "spec" => &["text", "spec"],
+    "sql" => &["text", "sql"],
+    "ss" => &["text", "scheme"],
+    "sty" => &["text", "tex"],
+    "styl" => &["text", "stylus"],
+    "sv" => &["text", "system-verilog"],
+    "svelte" => &["text", "svelte"],
+    "svg" => &["text", "image", "svg", "xml"],
+    "svh" => &["text", "system-verilog"],
+    "swf" => &["binary", "swf"],
+    "swift" => &["text", "swift"],
+    "swiftdeps" => &["text", "swiftdeps"],
+    "tac" => &["text", "twisted", "python"],
+    "tar" => &["binary", "tar"],
+    "targets" => &["text", "xml", "msbuild"],
+    "templ" => &["text", "templ"],
+    "tex" => &["text", "tex"],
+    "textproto" => &["text", "textproto"],
+    "tf" => &["text", "terraform"],
+    "tfvars" => &["text", "terraform"],
+    "tgz" => &["binary", "gzip"],
+    "thrift" => &["text", "thrift"],
+    "tiff" => &["binary", "image", "tiff"],
+    "toml" => &["text", "toml"],
+    "ts" => &["text", "ts"],
+    "tsv" => &["text", "tsv"],
+    "tsx" => &["text", "tsx"],
+    "ttf" => &["binary", "ttf"],
+    "twig" => &["text", "twig"],
+    "txsprofile" => &["text", "ini", "txsprofile"],
+    "txt" => &["text", "plain-text"],
+    "txtpb" => &["text", "textproto"],
+    "urdf" => &["text", "xml", "urdf"],
+    "v" => &["text", "verilog"],
+    "vb" => &["text", "vb"],
+    "vbproj" => &["text", "xml", "vbproj", "msbuild"],
+    "vcxproj" => &["text", "xml", "vcxproj", "msbuild"],
+    "vdx" => &["text", "vdx"],
+    "vh" => &["text", "verilog"],
+    "vhd" => &["text", "vhdl"],
+    "vim" => &["text", "vim"],
+    "vtl" => &["text", "vtl"],
+    "vue" => &["text", "vue"],
+    "war" => &["binary", "zip", "jar"],
+    "wav" => &["binary", "audio", "wav"],
+    "webp" => &["binary", "image", "webp"],
+    "whl" => &["binary", "wheel", "zip"],
+    "wkt" => &["text", "wkt"],
+    "woff" => &["binary", "woff"],
+    "woff2" => &["binary", "woff2"],
+    "wsdl" => &["text", "xml", "wsdl"],
+    "wsgi" => &["text", "wsgi", "python"],
+    "xhtml" => &["text", "xml", "html", "xhtml"],
+    "xacro" => &["text", "xml", "urdf", "xacro"],
+    "xctestplan" => &["text", "json"],
+    "xml" => &["text", "xml"],
+    "xq" => &["text", "xquery"],
+    "xql" => &["text", "xquery"],
+    "xqm" => &["text", "xquery"],
+    "xqu" => &["text", "xquery"],
+    "xquery" => &["text", "xquery"],
+    "xqy" => &["text", "xquery"],
+    "xsd" => &["text", "xml", "xsd"],
+    "xsl" => &["text", "xml", "xsl"],
+    "xslt" => &["text", "xml", "xsl"],
+    "yaml" => &["text", "yaml"],
+    "yamlld" => &["text", "yaml", "yamlld"],
+    "yang" => &["text", "yang"],
+    "yin" => &["text", "xml", "yin"],
+    "yml" => &["text", "yaml"],
+    "zcml" => &["text", "xml", "zcml"],
+    "zig" => &["text", "zig"],
+    "zip" => &["binary", "zip"],
+    "zpt" => &["text", "zpt"],
+    "zsh" => &["text", "shell", "zsh"],
+};
 
-        map.insert("adoc", HashSet::from(["text", "asciidoc"]));
-        map.insert("ai", HashSet::from(["binary", "adobe-illustrator"]));
-        map.insert("aj", HashSet::from(["text", "aspectj"]));
-        map.insert("asciidoc", HashSet::from(["text", "asciidoc"]));
-        map.insert("apinotes", HashSet::from(["text", "apinotes"]));
-        map.insert("asar", HashSet::from(["binary", "asar"]));
-        map.insert("asm", HashSet::from(["text", "asm"]));
-        map.insert("astro", HashSet::from(["text", "astro"]));
-        map.insert("avif", HashSet::from(["binary", "image", "avif"]));
-        map.insert("avsc", HashSet::from(["text", "avro-schema"]));
-        map.insert("bash", HashSet::from(["text", "shell", "bash"]));
-        map.insert("bat", HashSet::from(["text", "batch"]));
-        map.insert("bats", HashSet::from(["text", "shell", "bash", "bats"]));
-        map.insert("bazel", HashSet::from(["text", "bazel"]));
-        map.insert("bb", HashSet::from(["text", "bitbake"]));
-        map.insert("bbappend", HashSet::from(["text", "bitbake"]));
-        map.insert("bbclass", HashSet::from(["text", "bitbake"]));
-        map.insert("beancount", HashSet::from(["text", "beancount"]));
-        map.insert("bib", HashSet::from(["text", "bib"]));
-        map.insert("bmp", HashSet::from(["binary", "image", "bitmap"]));
-        map.insert("bz2", HashSet::from(["binary", "bzip2"]));
-        map.insert("bz3", HashSet::from(["binary", "bzip3"]));
-        map.insert("bzl", HashSet::from(["text", "bazel"]));
-        map.insert("c", HashSet::from(["text", "c"]));
-        map.insert("c++", HashSet::from(["text", "c++"]));
-        map.insert("c++m", HashSet::from(["text", "c++"]));
-        map.insert("cc", HashSet::from(["text", "c++"]));
-        map.insert("ccm", HashSet::from(["text", "c++"]));
-        map.insert("cfg", HashSet::from(["text"]));
-        map.insert("chs", HashSet::from(["text", "c2hs"]));
-        map.insert("cjs", HashSet::from(["text", "javascript"]));
-        map.insert("clj", HashSet::from(["text", "clojure"]));
-        map.insert("cljc", HashSet::from(["text", "clojure"]));
-        map.insert("cljs", HashSet::from(["text", "clojure", "clojurescript"]));
-        map.insert("cmake", HashSet::from(["text", "cmake"]));
-        map.insert("cnf", HashSet::from(["text"]));
-        map.insert("coffee", HashSet::from(["text", "coffee"]));
-        map.insert("conf", HashSet::from(["text"]));
-        map.insert("cpp", HashSet::from(["text", "c++"]));
-        map.insert("cppm", HashSet::from(["text", "c++"]));
-        map.insert("cr", HashSet::from(["text", "crystal"]));
-        map.insert("crt", HashSet::from(["text", "pem"]));
-        map.insert("cs", HashSet::from(["text", "c#"]));
-        map.insert("csproj", HashSet::from(["text", "xml", "csproj", "msbuild"]));
-        map.insert("csh", HashSet::from(["text", "shell", "csh"]));
-        map.insert("cson", HashSet::from(["text", "cson"]));
-        map.insert("css", HashSet::from(["text", "css"]));
-        map.insert("csv", HashSet::from(["text", "csv"]));
-        map.insert("csx", HashSet::from(["text", "c#", "c#script"]));
-        map.insert("cu", HashSet::from(["text", "cuda"]));
-        map.insert("cue", HashSet::from(["text", "cue"]));
-        map.insert("cuh", HashSet::from(["text", "cuda"]));
-        map.insert("cxx", HashSet::from(["text", "c++"]));
-        map.insert("cxxm", HashSet::from(["text", "c++"]));
-        map.insert("cylc", HashSet::from(["text", "cylc"]));
-        map.insert("dart", HashSet::from(["text", "dart"]));
-        map.insert("dbc", HashSet::from(["text", "dbc"]));
-        map.insert("def", HashSet::from(["text", "def"]));
-        map.insert("dll", HashSet::from(["binary"]));
-        map.insert("dtd", HashSet::from(["text", "dtd"]));
-        map.insert("ear", HashSet::from(["binary", "zip", "jar"]));
-        map.insert("edn", HashSet::from(["text", "clojure", "edn"]));
-        map.insert("ejs", HashSet::from(["text", "ejs"]));
-        map.insert("ejson", HashSet::from(["text", "json", "ejson"]));
-        map.insert("elm", HashSet::from(["text", "elm"]));
-        map.insert("env", HashSet::from(["text", "dotenv"]));
-        map.insert("eot", HashSet::from(["binary", "eot"]));
-        map.insert("eps", HashSet::from(["binary", "eps"]));
-        map.insert("erb", HashSet::from(["text", "erb"]));
-        map.insert("erl", HashSet::from(["text", "erlang"]));
-        map.insert("ex", HashSet::from(["text", "elixir"]));
-        map.insert("exe", HashSet::from(["binary"]));
-        map.insert("exs", HashSet::from(["text", "elixir"]));
-        map.insert("eyaml", HashSet::from(["text", "yaml"]));
-        map.insert("f03", HashSet::from(["text", "fortran"]));
-        map.insert("f08", HashSet::from(["text", "fortran"]));
-        map.insert("f90", HashSet::from(["text", "fortran"]));
-        map.insert("f95", HashSet::from(["text", "fortran"]));
-        map.insert("feature", HashSet::from(["text", "gherkin"]));
-        map.insert("fish", HashSet::from(["text", "fish"]));
-        map.insert("fits", HashSet::from(["binary", "fits"]));
-        map.insert("fs", HashSet::from(["text", "f#"]));
-        map.insert("fsproj", HashSet::from(["text", "xml", "fsproj", "msbuild"]));
-        map.insert("fsx", HashSet::from(["text", "f#", "f#script"]));
-        map.insert("gd", HashSet::from(["text", "gdscript"]));
-        map.insert("gemspec", HashSet::from(["text", "ruby"]));
-        map.insert("geojson", HashSet::from(["text", "geojson", "json"]));
-        map.insert("ggb", HashSet::from(["binary", "zip", "ggb"]));
-        map.insert("gif", HashSet::from(["binary", "image", "gif"]));
-        map.insert("gleam", HashSet::from(["text", "gleam"]));
-        map.insert("go", HashSet::from(["text", "go"]));
-        map.insert("gotmpl", HashSet::from(["text", "gotmpl"]));
-        map.insert("gpx", HashSet::from(["text", "gpx", "xml"]));
-        map.insert("graphql", HashSet::from(["text", "graphql"]));
-        map.insert("gradle", HashSet::from(["text", "groovy"]));
-        map.insert("groovy", HashSet::from(["text", "groovy"]));
-        map.insert("gyb", HashSet::from(["text", "gyb"]));
-        map.insert("gyp", HashSet::from(["text", "gyp", "python"]));
-        map.insert("gypi", HashSet::from(["text", "gyp", "python"]));
-        map.insert("gz", HashSet::from(["binary", "gzip"]));
-        map.insert("h", HashSet::from(["text", "header", "c", "c++"]));
-        map.insert("hbs", HashSet::from(["text", "handlebars"]));
-        map.insert("hcl", HashSet::from(["text", "hcl"]));
-        map.insert("hh", HashSet::from(["text", "header", "c++"]));
-        map.insert("hpp", HashSet::from(["text", "header", "c++"]));
-        map.insert("hrl", HashSet::from(["text", "erlang"]));
-        map.insert("hs", HashSet::from(["text", "haskell"]));
-        map.insert("htm", HashSet::from(["text", "html"]));
-        map.insert("html", HashSet::from(["text", "html"]));
-        map.insert("hxx", HashSet::from(["text", "header", "c++"]));
-        map.insert("icns", HashSet::from(["binary", "icns"]));
-        map.insert("ico", HashSet::from(["binary", "icon"]));
-        map.insert("ics", HashSet::from(["text", "icalendar"]));
-        map.insert("idl", HashSet::from(["text", "idl"]));
-        map.insert("idr", HashSet::from(["text", "idris"]));
-        map.insert("inc", HashSet::from(["text", "inc"]));
-        map.insert("ini", HashSet::from(["text", "ini"]));
-        map.insert("inl", HashSet::from(["text", "inl", "c++"]));
-        map.insert("ino", HashSet::from(["text", "ino", "c++"]));
-        map.insert("inx", HashSet::from(["text", "xml", "inx"]));
-        map.insert("ipynb", HashSet::from(["text", "jupyter", "json"]));
-        map.insert("ixx", HashSet::from(["text", "c++"]));
-        map.insert("j2", HashSet::from(["text", "jinja"]));
-        map.insert("jade", HashSet::from(["text", "jade"]));
-        map.insert("jar", HashSet::from(["binary", "zip", "jar"]));
-        map.insert("java", HashSet::from(["text", "java"]));
-        map.insert("jenkins", HashSet::from(["text", "groovy", "jenkins"]));
-        map.insert("jenkinsfile", HashSet::from(["text", "groovy", "jenkins"]));
-        map.insert("jinja", HashSet::from(["text", "jinja"]));
-        map.insert("jinja2", HashSet::from(["text", "jinja"]));
-        map.insert("jl", HashSet::from(["text", "julia"]));
-        map.insert("jpeg", HashSet::from(["binary", "image", "jpeg"]));
-        map.insert("jpg", HashSet::from(["binary", "image", "jpeg"]));
-        map.insert("js", HashSet::from(["text", "javascript"]));
-        map.insert("json", HashSet::from(["text", "json"]));
-        map.insert("jsonld", HashSet::from(["text", "json", "jsonld"]));
-        map.insert("jsonnet", HashSet::from(["text", "jsonnet"]));
-        map.insert("json5", HashSet::from(["text", "json5"]));
-        map.insert("jsx", HashSet::from(["text", "jsx"]));
-        map.insert("key", HashSet::from(["text", "pem"]));
-        map.insert("kml", HashSet::from(["text", "kml", "xml"]));
-        map.insert("kt", HashSet::from(["text", "kotlin"]));
-        map.insert("kts", HashSet::from(["text", "kotlin"]));
-        map.insert("lean", HashSet::from(["text", "lean"]));
-        map.insert("lektorproject", HashSet::from(["text", "ini", "lektorproject"]));
-        map.insert("less", HashSet::from(["text", "less"]));
-        map.insert("lfm", HashSet::from(["text", "lazarus", "lazarus-form"]));
-        map.insert("lhs", HashSet::from(["text", "literate-haskell"]));
-        map.insert("libsonnet", HashSet::from(["text", "jsonnet"]));
-        map.insert("lidr", HashSet::from(["text", "idris"]));
-        map.insert("liquid", HashSet::from(["text", "liquid"]));
-        map.insert("lpi", HashSet::from(["text", "lazarus", "xml"]));
-        map.insert("lpr", HashSet::from(["text", "lazarus", "pascal"]));
-        map.insert("lr", HashSet::from(["text", "lektor"]));
-        map.insert("lua", HashSet::from(["text", "lua"]));
-        map.insert("m", HashSet::from(["text", "objective-c"]));
-        map.insert("m4", HashSet::from(["text", "m4"]));
-        map.insert("magik", HashSet::from(["text", "magik"]));
-        map.insert("make", HashSet::from(["text", "makefile"]));
-        map.insert("manifest", HashSet::from(["text", "manifest"]));
-        map.insert("map", HashSet::from(["text", "map"]));
-        map.insert("markdown", HashSet::from(["text", "markdown"]));
-        map.insert("md", HashSet::from(["text", "markdown"]));
-        map.insert("mdx", HashSet::from(["text", "mdx"]));
-        map.insert("meson", HashSet::from(["text", "meson"]));
-        map.insert("metal", HashSet::from(["text", "metal"]));
-        map.insert("mib", HashSet::from(["text", "mib"]));
-        map.insert("mjs", HashSet::from(["text", "javascript"]));
-        map.insert("mk", HashSet::from(["text", "makefile"]));
-        map.insert("ml", HashSet::from(["text", "ocaml"]));
-        map.insert("mli", HashSet::from(["text", "ocaml"]));
-        map.insert("mm", HashSet::from(["text", "c++", "objective-c++"]));
-        map.insert("modulemap", HashSet::from(["text", "modulemap"]));
-        map.insert("mscx", HashSet::from(["text", "xml", "musescore"]));
-        map.insert("mscz", HashSet::from(["binary", "zip", "musescore"]));
-        map.insert("mustache", HashSet::from(["text", "mustache"]));
-        map.insert("myst", HashSet::from(["text", "myst"]));
-        map.insert("ngdoc", HashSet::from(["text", "ngdoc"]));
-        map.insert("nim", HashSet::from(["text", "nim"]));
-        map.insert("nims", HashSet::from(["text", "nim"]));
-        map.insert("nimble", HashSet::from(["text", "nimble"]));
-        map.insert("nix", HashSet::from(["text", "nix"]));
-        map.insert("njk", HashSet::from(["text", "nunjucks"]));
-        map.insert("otf", HashSet::from(["binary", "otf"]));
-        map.insert("p12", HashSet::from(["binary", "p12"]));
-        map.insert("pas", HashSet::from(["text", "pascal"]));
-        map.insert("patch", HashSet::from(["text", "diff"]));
-        map.insert("pdf", HashSet::from(["binary", "pdf"]));
-        map.insert("pem", HashSet::from(["text", "pem"]));
-        map.insert("php", HashSet::from(["text", "php"]));
-        map.insert("php4", HashSet::from(["text", "php"]));
-        map.insert("php5", HashSet::from(["text", "php"]));
-        map.insert("phtml", HashSet::from(["text", "php"]));
-        map.insert("pl", HashSet::from(["text", "perl"]));
-        map.insert("plantuml", HashSet::from(["text", "plantuml"]));
-        map.insert("pm", HashSet::from(["text", "perl"]));
-        map.insert("png", HashSet::from(["binary", "image", "png"]));
-        map.insert("po", HashSet::from(["text", "pofile"]));
-        map.insert("pom", HashSet::from(["pom", "text", "xml"]));
-        map.insert("pp", HashSet::from(["text", "puppet"]));
-        map.insert("prisma", HashSet::from(["text", "prisma"]));
-        map.insert("properties", HashSet::from(["text", "java-properties"]));
-        map.insert("props", HashSet::from(["text", "xml", "msbuild"]));
-        map.insert("proto", HashSet::from(["text", "proto"]));
-        map.insert("ps1", HashSet::from(["text", "powershell"]));
-        map.insert("psd1", HashSet::from(["text", "powershell"]));
-        map.insert("psm1", HashSet::from(["text", "powershell"]));
-        map.insert("pug", HashSet::from(["text", "pug"]));
-        map.insert("puml", HashSet::from(["text", "plantuml"]));
-        map.insert("purs", HashSet::from(["text", "purescript"]));
-        map.insert("pxd", HashSet::from(["text", "cython"]));
-        map.insert("pxi", HashSet::from(["text", "cython"]));
-        map.insert("py", HashSet::from(["text", "python"]));
-        map.insert("pyi", HashSet::from(["text", "pyi"]));
-        map.insert("pyproj", HashSet::from(["text", "xml", "pyproj", "msbuild"]));
-        map.insert("pyt", HashSet::from(["text", "python"]));
-        map.insert("pyx", HashSet::from(["text", "cython"]));
-        map.insert("pyz", HashSet::from(["binary", "pyz"]));
-        map.insert("pyzw", HashSet::from(["binary", "pyz"]));
-        map.insert("qml", HashSet::from(["text", "qml"]));
-        map.insert("r", HashSet::from(["text", "r"]));
-        map.insert("rake", HashSet::from(["text", "ruby"]));
-        map.insert("rb", HashSet::from(["text", "ruby"]));
-        map.insert("resx", HashSet::from(["text", "resx", "xml"]));
-        map.insert("rng", HashSet::from(["text", "xml", "relax-ng"]));
-        map.insert("rs", HashSet::from(["text", "rust"]));
-        map.insert("rst", HashSet::from(["text", "rst"]));
-        map.insert("s", HashSet::from(["text", "asm"]));
-        map.insert("sas", HashSet::from(["text", "sas"]));
-        map.insert("sass", HashSet::from(["text", "sass"]));
-        map.insert("sbt", HashSet::from(["text", "sbt", "scala"]));
-        map.insert("sc", HashSet::from(["text", "scala"]));
-        map.insert("scala", HashSet::from(["text", "scala"]));
-        map.insert("scm", HashSet::from(["text", "scheme"]));
-        map.insert("scss", HashSet::from(["text", "scss"]));
-        map.insert("sh", HashSet::from(["text", "shell"]));
-        map.insert("sln", HashSet::from(["text", "sln"]));
-        map.insert("sls", HashSet::from(["text", "salt"]));
-        map.insert("so", HashSet::from(["binary"]));
-        map.insert("sol", HashSet::from(["text", "solidity"]));
-        map.insert("spec", HashSet::from(["text", "spec"]));
-        map.insert("sql", HashSet::from(["text", "sql"]));
-        map.insert("ss", HashSet::from(["text", "scheme"]));
-        map.insert("sty", HashSet::from(["text", "tex"]));
-        map.insert("styl", HashSet::from(["text", "stylus"]));
-        map.insert("sv", HashSet::from(["text", "system-verilog"]));
-        map.insert("svelte", HashSet::from(["text", "svelte"]));
-        map.insert("svg", HashSet::from(["text", "image", "svg", "xml"]));
-        map.insert("svh", HashSet::from(["text", "system-verilog"]));
-        map.insert("swf", HashSet::from(["binary", "swf"]));
-        map.insert("swift", HashSet::from(["text", "swift"]));
-        map.insert("swiftdeps", HashSet::from(["text", "swiftdeps"]));
-        map.insert("tac", HashSet::from(["text", "twisted", "python"]));
-        map.insert("tar", HashSet::from(["binary", "tar"]));
-        map.insert("targets", HashSet::from(["text", "xml", "msbuild"]));
-        map.insert("templ", HashSet::from(["text", "templ"]));
-        map.insert("tex", HashSet::from(["text", "tex"]));
-        map.insert("textproto", HashSet::from(["text", "textproto"]));
-        map.insert("tf", HashSet::from(["text", "terraform"]));
-        map.insert("tfvars", HashSet::from(["text", "terraform"]));
-        map.insert("tgz", HashSet::from(["binary", "gzip"]));
-        map.insert("thrift", HashSet::from(["text", "thrift"]));
-        map.insert("tiff", HashSet::from(["binary", "image", "tiff"]));
-        map.insert("toml", HashSet::from(["text", "toml"]));
-        map.insert("ts", HashSet::from(["text", "ts"]));
-        map.insert("tsv", HashSet::from(["text", "tsv"]));
-        map.insert("tsx", HashSet::from(["text", "tsx"]));
-        map.insert("ttf", HashSet::from(["binary", "ttf"]));
-        map.insert("twig", HashSet::from(["text", "twig"]));
-        map.insert("txsprofile", HashSet::from(["text", "ini", "txsprofile"]));
-        map.insert("txt", HashSet::from(["text", "plain-text"]));
-        map.insert("txtpb", HashSet::from(["text", "textproto"]));
-        map.insert("urdf", HashSet::from(["text", "xml", "urdf"]));
-        map.insert("v", HashSet::from(["text", "verilog"]));
-        map.insert("vb", HashSet::from(["text", "vb"]));
-        map.insert("vbproj", HashSet::from(["text", "xml", "vbproj", "msbuild"]));
-        map.insert("vcxproj", HashSet::from(["text", "xml", "vcxproj", "msbuild"]));
-        map.insert("vdx", HashSet::from(["text", "vdx"]));
-        map.insert("vh", HashSet::from(["text", "verilog"]));
-        map.insert("vhd", HashSet::from(["text", "vhdl"]));
-        map.insert("vim", HashSet::from(["text", "vim"]));
-        map.insert("vtl", HashSet::from(["text", "vtl"]));
-        map.insert("vue", HashSet::from(["text", "vue"]));
-        map.insert("war", HashSet::from(["binary", "zip", "jar"]));
-        map.insert("wav", HashSet::from(["binary", "audio", "wav"]));
-        map.insert("webp", HashSet::from(["binary", "image", "webp"]));
-        map.insert("whl", HashSet::from(["binary", "wheel", "zip"]));
-        map.insert("wkt", HashSet::from(["text", "wkt"]));
-        map.insert("woff", HashSet::from(["binary", "woff"]));
-        map.insert("woff2", HashSet::from(["binary", "woff2"]));
-        map.insert("wsdl", HashSet::from(["text", "xml", "wsdl"]));
-        map.insert("wsgi", HashSet::from(["text", "wsgi", "python"]));
-        map.insert("xhtml", HashSet::from(["text", "xml", "html", "xhtml"]));
-        map.insert("xacro", HashSet::from(["text", "xml", "urdf", "xacro"]));
-        map.insert("xctestplan", HashSet::from(["text", "json"]));
-        map.insert("xml", HashSet::from(["text", "xml"]));
-        map.insert("xq", HashSet::from(["text", "xquery"]));
-        map.insert("xql", HashSet::from(["text", "xquery"]));
-        map.insert("xqm", HashSet::from(["text", "xquery"]));
-        map.insert("xqu", HashSet::from(["text", "xquery"]));
-        map.insert("xquery", HashSet::from(["text", "xquery"]));
-        map.insert("xqy", HashSet::from(["text", "xquery"]));
-        map.insert("xsd", HashSet::from(["text", "xml", "xsd"]));
-        map.insert("xsl", HashSet::from(["text", "xml", "xsl"]));
-        map.insert("xslt", HashSet::from(["text", "xml", "xsl"]));
-        map.insert("yaml", HashSet::from(["text", "yaml"]));
-        map.insert("yamlld", HashSet::from(["text", "yaml", "yamlld"]));
-        map.insert("yang", HashSet::from(["text", "yang"]));
-        map.insert("yin", HashSet::from(["text", "xml", "yin"]));
-        map.insert("yml", HashSet::from(["text", "yaml"]));
-        map.insert("zcml", HashSet::from(["text", "xml", "zcml"]));
-        map.insert("zig", HashSet::from(["text", "zig"]));
-        map.insert("zip", HashSet::from(["binary", "zip"]));
-        map.insert("zpt", HashSet::from(["text", "zpt"]));
-        map.insert("zsh", HashSet::from(["text", "shell", "zsh"]));
+pub static EXTENSIONS_NEED_BINARY_CHECK_TAGS: phf::Map<&'static str, &'static [&'static str]> = phf_map! {
+    "plist" => &["plist"],
+    "ppm" => &["image", "ppm"],
+};
 
-        map
-    };
+pub static NAME_TAGS: phf::Map<&'static str, &'static [&'static str]> = phf_map! {
+    ".ansible-lint" => &["text", "yaml"],
+    ".clang-format" => &["text", "yaml"],
+    ".clang-tidy" => &["text", "yaml"],
+    ".salt-lint" => &["text", "yaml", "salt-lint"],
+    ".yamllint" => &["text", "yaml", "yamllint"],
+    ".babelrc" => &["text", "json", "babelrc"],
+    ".bowerrc" => &["text", "json", "bowerrc"],
+    ".csslintrc" => &["text", "json", "csslintrc"],
+    ".eslintrc" => &["text", "json"],
+    ".eslintrc.js" => &["text", "javascript"],
+    ".eslintrc.json" => &["text", "json"],
+    ".eslintrc.yaml" => &["text", "yaml"],
+    ".eslintrc.yml" => &["text", "yaml"],
+    ".jshintrc" => &["text", "json", "jshintrc"],
+    ".mention-bot" => &["text", "json", "mention-bot"],
+    ".prettierrc" => &["text", "json"],
+    ".prettierrc.json" => &["text", "json"],
+    ".prettierrc.toml" => &["text", "toml"],
+    ".prettierrc.yaml" => &["text", "yaml"],
+    ".prettierrc.yml" => &["text", "yaml"],
+    ".stylintrc" => &["text", "json"],
+    ".bash_aliases" => &["text", "shell", "bash"],
+    ".bash_profile" => &["text", "shell", "bash"],
+    ".bashrc" => &["text", "shell", "bash"],
+    ".cshrc" => &["text", "shell", "csh"],
+    ".envrc" => &["text", "shell", "bash"],
+    ".zlogin" => &["text", "shell", "zsh"],
+    ".zlogout" => &["text", "shell", "zsh"],
+    ".zprofile" => &["text", "shell", "zsh"],
+    ".zshrc" => &["text", "shell", "zsh"],
+    ".zshenv" => &["text", "shell", "zsh"],
+    "direnvrc" => &["text", "shell", "bash"],
+    ".codespellrc" => &["text", "ini", "codespellrc"],
+    ".coveragerc" => &["text", "ini", "coveragerc"],
+    ".flake8" => &["text", "ini", "flake8"],
+    ".gitconfig" => &["text", "ini", "gitconfig"],
+    ".gitlint" => &["text", "ini", "gitlint"],
+    ".hgrc" => &["text", "ini", "hgrc"],
+    ".isort.cfg" => &["text", "ini", "isort"],
+    ".pypirc" => &["text", "ini", "pypirc"],
+    ".rstcheck.cfg" => &["text", "ini"],
+    ".sqlfluff" => &["text", "ini"],
+    "pylintrc" => &["text", "ini", "pylintrc"],
+    "setup.cfg" => &["text", "ini"],
+    ".dockerignore" => &["text", "dockerignore"],
+    ".gitattributes" => &["text", "gitattributes"],
+    ".gitignore" => &["text", "gitignore"],
+    ".gitmodules" => &["text", "gitmodules"],
+    ".npmignore" => &["text", "npmignore"],
+    ".prettierignore" => &["text", "gitignore", "prettierignore"],
+    ".bazelrc" => &["text", "bazelrc"],
+    ".browserslistrc" => &["text", "browserslistrc"],
+    ".editorconfig" => &["text", "editorconfig"],
+    ".mailmap" => &["text", "mailmap"],
+    ".pdbrc" => &["text", "python", "pdbrc"],
+    "BUILD" => &["text", "bazel"],
+    "BUILD.bazel" => &["text", "bazel"],
+    "CMakeLists.txt" => &["text", "cmake"],
+    "Dockerfile" => &["text", "dockerfile"],
+    "Containerfile" => &["text", "dockerfile"],
+    "Makefile" => &["text", "makefile"],
+    "GNUmakefile" => &["text", "makefile"],
+    "makefile" => &["text", "makefile"],
+    "meson.build" => &["text", "meson"],
+    "meson_options.txt" => &["text", "meson"],
+    "WORKSPACE" => &["text", "bazel"],
+    "WORKSPACE.bazel" => &["text", "bazel"],
+    "copy.bara.sky" => &["text", "bazel"],
+    "Cargo.toml" => &["text", "toml", "cargo"],
+    "Cargo.lock" => &["text", "toml", "cargo-lock"],
+    "composer.json" => &["text", "json"],
+    "composer.lock" => &["text", "json"],
+    "go.mod" => &["text", "go-mod"],
+    "go.sum" => &["text", "go-sum"],
+    "package.json" => &["text", "json"],
+    "package-lock.json" => &["text", "json"],
+    "Pipfile" => &["text", "toml"],
+    "Pipfile.lock" => &["text", "json"],
+    "poetry.lock" => &["text", "toml"],
+    "pom.xml" => &["pom", "text", "xml"],
+    "yarn.lock" => &["text", "yaml"],
+    "config.ru" => &["text", "ruby"],
+    "Gemfile" => &["text", "ruby"],
+    "Gemfile.lock" => &["text"],
+    "Rakefile" => &["text", "ruby"],
+    "Vagrantfile" => &["text", "ruby"],
+    "bblayers.conf" => &["text", "bitbake"],
+    "bitbake.conf" => &["text", "bitbake"],
+    "rebar.config" => &["text", "erlang"],
+    "sys.config" => &["text", "erlang"],
+    "sys.config.src" => &["text", "erlang"],
+    "AUTHORS" => &["text", "plain-text"],
+    "CHANGELOG" => &["text", "plain-text"],
+    "CONTRIBUTING" => &["text", "plain-text"],
+    "COPYING" => &["text", "plain-text"],
+    "LICENSE" => &["text", "plain-text"],
+    "MAINTAINERS" => &["text", "plain-text"],
+    "NEWS" => &["text", "plain-text"],
+    "NOTICE" => &["text", "plain-text"],
+    "PATENTS" => &["text", "plain-text"],
+    "README" => &["text", "plain-text"],
+    "Jenkinsfile" => &["text", "groovy", "jenkins"],
+    "PKGBUILD" => &["text", "bash", "pkgbuild", "alpm"],
+    "Tiltfile" => &["text", "tiltfile"],
+    "wscript" => &["text", "python"],
+};
 
-    pub static ref EXTENSIONS_NEED_BINARY_CHECK: HashMap<&'static str, TagSet> = {
-        let mut map = HashMap::new();
-        map.insert("plist", HashSet::from(["plist"]));
-        map.insert("ppm", HashSet::from(["image", "ppm"]));
-        map
-    };
+pub fn get_extension_tags(ext: &str) -> TagSet {
+    EXTENSION_TAGS
+        .get(ext)
+        .map(|&tags| tags_from_array(tags))
+        .unwrap_or_default()
+}
 
-    pub static ref NAMES: HashMap<&'static str, TagSet> = {
-        let mut map = HashMap::new();
+pub fn get_extensions_need_binary_check_tags(ext: &str) -> TagSet {
+    EXTENSIONS_NEED_BINARY_CHECK_TAGS
+        .get(ext)
+        .map(|&tags| tags_from_array(tags))
+        .unwrap_or_default()
+}
 
-        // Helper function to merge sets
-        let merge = |base: &[&'static str], additional: &[&'static str]| -> TagSet {
-            base.iter().cloned().chain(additional.iter().cloned()).collect()
-        };
-
-        // YAML-based configs
-        map.insert(".ansible-lint", HashSet::from(["text", "yaml"]));
-        map.insert(".clang-format", HashSet::from(["text", "yaml"]));
-        map.insert(".clang-tidy", HashSet::from(["text", "yaml"]));
-        map.insert(".salt-lint", merge(&["text", "yaml"], &["salt-lint"]));
-        map.insert(".yamllint", merge(&["text", "yaml"], &["yamllint"]));
-
-        // JSON-based configs
-        map.insert(".babelrc", merge(&["text", "json"], &["babelrc"]));
-        map.insert(".bowerrc", merge(&["text", "json"], &["bowerrc"]));
-        map.insert(".csslintrc", merge(&["text", "json"], &["csslintrc"]));
-        map.insert(".eslintrc", HashSet::from(["text", "json"]));
-        map.insert(".eslintrc.js", HashSet::from(["text", "javascript"]));
-        map.insert(".eslintrc.json", HashSet::from(["text", "json"]));
-        map.insert(".eslintrc.yaml", HashSet::from(["text", "yaml"]));
-        map.insert(".eslintrc.yml", HashSet::from(["text", "yaml"]));
-        map.insert(".jshintrc", merge(&["text", "json"], &["jshintrc"]));
-        map.insert(".mention-bot", merge(&["text", "json"], &["mention-bot"]));
-        map.insert(".prettierrc", HashSet::from(["text", "json"]));
-        map.insert(".prettierrc.json", HashSet::from(["text", "json"]));
-        map.insert(".prettierrc.toml", HashSet::from(["text", "toml"]));
-        map.insert(".prettierrc.yaml", HashSet::from(["text", "yaml"]));
-        map.insert(".prettierrc.yml", HashSet::from(["text", "yaml"]));
-        map.insert(".stylintrc", HashSet::from(["text", "json"]));
-
-        // Shell configs
-        map.insert(".bash_aliases", HashSet::from(["text", "shell", "bash"]));
-        map.insert(".bash_profile", HashSet::from(["text", "shell", "bash"]));
-        map.insert(".bashrc", HashSet::from(["text", "shell", "bash"]));
-        map.insert(".cshrc", HashSet::from(["text", "shell", "csh"]));
-        map.insert(".envrc", HashSet::from(["text", "shell", "bash"]));
-        map.insert(".zlogin", HashSet::from(["text", "shell", "zsh"]));
-        map.insert(".zlogout", HashSet::from(["text", "shell", "zsh"]));
-        map.insert(".zprofile", HashSet::from(["text", "shell", "zsh"]));
-        map.insert(".zshrc", HashSet::from(["text", "shell", "zsh"]));
-        map.insert(".zshenv", HashSet::from(["text", "shell", "zsh"]));
-        map.insert("direnvrc", HashSet::from(["text", "shell", "bash"]));
-
-        // INI-based configs
-        map.insert(".codespellrc", merge(&["text", "ini"], &["codespellrc"]));
-        map.insert(".coveragerc", merge(&["text", "ini"], &["coveragerc"]));
-        map.insert(".flake8", merge(&["text", "ini"], &["flake8"]));
-        map.insert(".gitconfig", merge(&["text", "ini"], &["gitconfig"]));
-        map.insert(".gitlint", merge(&["text", "ini"], &["gitlint"]));
-        map.insert(".hgrc", merge(&["text", "ini"], &["hgrc"]));
-        map.insert(".isort.cfg", merge(&["text", "ini"], &["isort"]));
-        map.insert(".pypirc", merge(&["text", "ini"], &["pypirc"]));
-        map.insert(".rstcheck.cfg", HashSet::from(["text", "ini"]));
-        map.insert(".sqlfluff", HashSet::from(["text", "ini"]));
-        map.insert("pylintrc", merge(&["text", "ini"], &["pylintrc"]));
-        map.insert("setup.cfg", HashSet::from(["text", "ini"]));
-
-        // Git files
-        map.insert(".dockerignore", HashSet::from(["text", "dockerignore"]));
-        map.insert(".gitattributes", HashSet::from(["text", "gitattributes"]));
-        map.insert(".gitignore", HashSet::from(["text", "gitignore"]));
-        map.insert(".gitmodules", HashSet::from(["text", "gitmodules"]));
-        map.insert(".npmignore", HashSet::from(["text", "npmignore"]));
-        map.insert(".prettierignore", HashSet::from(["text", "gitignore", "prettierignore"]));
-
-        // Special files
-        map.insert(".bazelrc", HashSet::from(["text", "bazelrc"]));
-        map.insert(".browserslistrc", HashSet::from(["text", "browserslistrc"]));
-        map.insert(".editorconfig", HashSet::from(["text", "editorconfig"]));
-        map.insert(".mailmap", HashSet::from(["text", "mailmap"]));
-        map.insert(".pdbrc", merge(&["text", "python"], &["pdbrc"]));
-
-        // Build files
-        map.insert("BUILD", HashSet::from(["text", "bazel"]));
-        map.insert("BUILD.bazel", HashSet::from(["text", "bazel"]));
-        map.insert("CMakeLists.txt", HashSet::from(["text", "cmake"]));
-        map.insert("Dockerfile", HashSet::from(["text", "dockerfile"]));
-        map.insert("Containerfile", HashSet::from(["text", "dockerfile"]));
-        map.insert("Makefile", HashSet::from(["text", "makefile"]));
-        map.insert("GNUmakefile", HashSet::from(["text", "makefile"]));
-        map.insert("makefile", HashSet::from(["text", "makefile"]));
-        map.insert("meson.build", HashSet::from(["text", "meson"]));
-        map.insert("meson_options.txt", HashSet::from(["text", "meson"]));
-        map.insert("WORKSPACE", HashSet::from(["text", "bazel"]));
-        map.insert("WORKSPACE.bazel", HashSet::from(["text", "bazel"]));
-        map.insert("copy.bara.sky", HashSet::from(["text", "bazel"]));
-
-        // Package files
-        map.insert("Cargo.toml", merge(&["text", "toml"], &["cargo"]));
-        map.insert("Cargo.lock", merge(&["text", "toml"], &["cargo-lock"]));
-        map.insert("composer.json", HashSet::from(["text", "json"]));
-        map.insert("composer.lock", HashSet::from(["text", "json"]));
-        map.insert("go.mod", HashSet::from(["text", "go-mod"]));
-        map.insert("go.sum", HashSet::from(["text", "go-sum"]));
-        map.insert("package.json", HashSet::from(["text", "json"]));
-        map.insert("package-lock.json", HashSet::from(["text", "json"]));
-        map.insert("Pipfile", HashSet::from(["text", "toml"]));
-        map.insert("Pipfile.lock", HashSet::from(["text", "json"]));
-        map.insert("poetry.lock", HashSet::from(["text", "toml"]));
-        map.insert("pom.xml", HashSet::from(["pom", "text", "xml"]));
-        map.insert("yarn.lock", HashSet::from(["text", "yaml"]));
-
-        // Ruby files
-        map.insert("config.ru", HashSet::from(["text", "ruby"]));
-        map.insert("Gemfile", HashSet::from(["text", "ruby"]));
-        map.insert("Gemfile.lock", HashSet::from(["text"]));
-        map.insert("Rakefile", HashSet::from(["text", "ruby"]));
-        map.insert("Vagrantfile", HashSet::from(["text", "ruby"]));
-
-        // Bitbake files
-        map.insert("bblayers.conf", HashSet::from(["text", "bitbake"]));
-        map.insert("bitbake.conf", HashSet::from(["text", "bitbake"]));
-
-        // Erlang files
-        map.insert("rebar.config", HashSet::from(["text", "erlang"]));
-        map.insert("sys.config", HashSet::from(["text", "erlang"]));
-        map.insert("sys.config.src", HashSet::from(["text", "erlang"]));
-
-        // Documentation and misc
-        map.insert("AUTHORS", HashSet::from(["text", "plain-text"]));
-        map.insert("CHANGELOG", HashSet::from(["text", "plain-text"]));
-        map.insert("CONTRIBUTING", HashSet::from(["text", "plain-text"]));
-        map.insert("COPYING", HashSet::from(["text", "plain-text"]));
-        map.insert("LICENSE", HashSet::from(["text", "plain-text"]));
-        map.insert("MAINTAINERS", HashSet::from(["text", "plain-text"]));
-        map.insert("NEWS", HashSet::from(["text", "plain-text"]));
-        map.insert("NOTICE", HashSet::from(["text", "plain-text"]));
-        map.insert("PATENTS", HashSet::from(["text", "plain-text"]));
-        map.insert("README", HashSet::from(["text", "plain-text"]));
-
-        // Special build/config files
-        map.insert("Jenkinsfile", HashSet::from(["text", "groovy", "jenkins"]));
-        map.insert("PKGBUILD", HashSet::from(["text", "bash", "pkgbuild", "alpm"]));
-        map.insert("Tiltfile", HashSet::from(["text", "tiltfile"]));
-        map.insert("wscript", HashSet::from(["text", "python"]));
-
-        map
-    };
+pub fn get_name_tags(name: &str) -> TagSet {
+    NAME_TAGS
+        .get(name)
+        .map(|&tags| tags_from_array(tags))
+        .unwrap_or_default()
 }

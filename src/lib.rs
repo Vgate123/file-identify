@@ -11,20 +11,29 @@
 //! ## Quick Start
 //!
 //! ```rust
-//! use file_identify::{tags_from_path, tags_from_filename};
+//! use file_identify::{tags_from_path, tags_from_filename, FileIdentifier};
 //!
-//! // Identify a Python file
+//! // Simple filename identification
 //! let tags = tags_from_filename("script.py");
 //! assert!(tags.contains("python"));
 //! assert!(tags.contains("text"));
 //!
-//! // Identify from filesystem path
+//! // Full file identification from filesystem path
 //! # use std::fs;
 //! # use tempfile::tempdir;
 //! # let dir = tempdir().unwrap();
 //! # let file_path = dir.path().join("test.py");
 //! # fs::write(&file_path, "print('hello')").unwrap();
 //! let tags = tags_from_path(&file_path).unwrap();
+//! assert!(tags.contains("file"));
+//! assert!(tags.contains("python"));
+//!
+//! // Customized identification with builder pattern
+//! let identifier = FileIdentifier::new()
+//!     .skip_content_analysis()  // Skip text vs binary detection
+//!     .skip_shebang_analysis(); // Skip shebang parsing
+//! 
+//! let tags = identifier.identify(&file_path).unwrap();
 //! assert!(tags.contains("file"));
 //! assert!(tags.contains("python"));
 //! ```
@@ -48,47 +57,401 @@
 
 use std::collections::HashSet;
 use std::fs;
-use std::io::{BufRead, BufReader, Read};
+use std::io::{BufReader, Read};
 use std::path::Path;
+use std::fmt;
 
 pub mod extensions;
 pub mod interpreters;
 pub mod tags;
 
-use extensions::{EXTENSIONS, EXTENSIONS_NEED_BINARY_CHECK, NAMES};
-use interpreters::INTERPRETERS;
+/// A tuple-like immutable container for shebang components that matches Python's tuple behavior.
+/// 
+/// This type is designed to be a direct equivalent to Python's `tuple[str, ...]` for 
+/// parse_shebang functions, providing immutable access to shebang components.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ShebangTuple {
+    components: Box<[String]>,
+}
+
+impl ShebangTuple {
+    /// Create a new empty ShebangTuple (equivalent to Python's `()`)
+    pub fn new() -> Self {
+        Self {
+            components: Box::new([]),
+        }
+    }
+    
+    /// Create a ShebangTuple from a vector of strings
+    pub fn from_vec(vec: Vec<String>) -> Self {
+        Self {
+            components: vec.into_boxed_slice(),
+        }
+    }
+    
+    /// Get the length of the tuple (equivalent to Python's `len(tuple)`)
+    pub const fn len(&self) -> usize {
+        self.components.len()
+    }
+    
+    /// Check if the tuple is empty (equivalent to Python's `not tuple`)
+    pub const fn is_empty(&self) -> bool {
+        self.components.is_empty()
+    }
+    
+    /// Get an element by index (equivalent to Python's `tuple[index]`)
+    /// Returns None if index is out of bounds
+    pub fn get(&self, index: usize) -> Option<&str> {
+        self.components.get(index).map(|s| s.as_str())
+    }
+    
+    /// Get the first element (equivalent to Python's `tuple[0]` when safe)
+    pub fn first(&self) -> Option<&str> {
+        self.get(0)
+    }
+    
+    /// Convert to a Vec for internal use (consumes the tuple)
+    pub fn into_vec(self) -> Vec<String> {
+        self.components.into_vec()
+    }
+    
+    /// Iterate over the components (equivalent to Python's `for item in tuple`)
+    pub fn iter(&self) -> std::slice::Iter<String> {
+        self.components.iter()
+    }
+    
+    /// Convert to a slice for easy pattern matching
+    pub fn as_slice(&self) -> &[String] {
+        &self.components
+    }
+}
+
+// Implement Index trait for tuple[index] syntax
+impl std::ops::Index<usize> for ShebangTuple {
+    type Output = str;
+    
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.components[index]
+    }
+}
+
+// Implement IntoIterator for for-loops
+impl<'a> IntoIterator for &'a ShebangTuple {
+    type Item = &'a String;
+    type IntoIter = std::slice::Iter<'a, String>;
+    
+    fn into_iter(self) -> Self::IntoIter {
+        self.components.iter()
+    }
+}
+
+// Implement FromIterator for collecting
+impl FromIterator<String> for ShebangTuple {
+    fn from_iter<T: IntoIterator<Item = String>>(iter: T) -> Self {
+        Self::from_vec(iter.into_iter().collect())
+    }
+}
+
+// Display implementation (equivalent to Python's str(tuple))
+impl fmt::Display for ShebangTuple {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "(")?;
+        for (i, component) in self.components.iter().enumerate() {
+            if i > 0 {
+                write!(f, ", ")?;
+            }
+            write!(f, "'{}'", component)?;
+        }
+        if self.components.len() == 1 {
+            write!(f, ",")?;  // Python tuple trailing comma for single element
+        }
+        write!(f, ")")
+    }
+}
+
+// Conversion from Vec<String>
+impl From<Vec<String>> for ShebangTuple {
+    fn from(vec: Vec<String>) -> Self {
+        Self::from_vec(vec)
+    }
+}
+
+// Conversion from empty ()
+impl Default for ShebangTuple {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+use extensions::{get_extension_tags, get_extensions_need_binary_check_tags, get_name_tags};
+use interpreters::get_interpreter_tags;
 use tags::*;
+
+/// Configuration for file identification behavior.
+/// 
+/// Allows customizing which analysis steps to perform and their order.
+/// Use `FileIdentifier::new()` to create a builder and customize identification.
+#[derive(Debug, Clone)]
+pub struct FileIdentifier {
+    skip_content_analysis: bool,
+    skip_shebang_analysis: bool,
+    custom_extensions: Option<std::collections::HashMap<String, TagSet>>,
+}
+
+impl Default for FileIdentifier {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl FileIdentifier {
+    /// Create a new file identifier with default settings.
+    ///
+    /// By default, all analysis steps are enabled:
+    /// - File system metadata analysis
+    /// - Filename and extension analysis  
+    /// - Shebang analysis for executable files
+    /// - Content analysis (text vs binary detection)
+    pub fn new() -> Self {
+        Self {
+            skip_content_analysis: false,
+            skip_shebang_analysis: false,
+            custom_extensions: None,
+        }
+    }
+
+    /// Skip content analysis (text vs binary detection).
+    ///
+    /// This avoids reading file contents, making identification faster
+    /// but potentially less accurate for files without clear extension/filename patterns.
+    pub fn skip_content_analysis(mut self) -> Self {
+        self.skip_content_analysis = true;
+        self
+    }
+
+    /// Skip shebang analysis for executable files.
+    ///
+    /// This avoids parsing shebang lines, making identification faster
+    /// but less accurate for executable scripts without recognized extensions.
+    pub fn skip_shebang_analysis(mut self) -> Self {
+        self.skip_shebang_analysis = true;
+        self
+    }
+
+    /// Add custom file extension mappings.
+    ///
+    /// These will be checked before the built-in extension mappings.
+    /// Useful for organization-specific or project-specific file types.
+    pub fn with_custom_extensions(mut self, extensions: std::collections::HashMap<String, TagSet>) -> Self {
+        self.custom_extensions = Some(extensions);
+        self
+    }
+
+    /// Identify a file using the configured settings.
+    ///
+    /// This is equivalent to `tags_from_path` but with customizable behavior.
+    pub fn identify<P: AsRef<Path>>(&self, path: P) -> Result<TagSet> {
+        self.identify_with_config(path)
+    }
+
+    fn identify_with_config<P: AsRef<Path>>(&self, path: P) -> Result<TagSet> {
+        let path = path.as_ref();
+        let path_str = path.to_string_lossy();
+
+        // Get file metadata
+        let metadata = match fs::symlink_metadata(path) {
+            Ok(meta) => meta,
+            Err(_) => return Err(IdentifyError::PathNotFound { path: path_str.to_string() }),
+        };
+
+        // Step 1: Check for non-regular file types (directory, symlink, socket)
+        if let Some(file_type_tags) = analyze_file_type(&metadata) {
+            return Ok(file_type_tags);
+        }
+
+        // Step 2: This is a regular file - start building tag set
+        let mut tags = TagSet::new();
+        tags.insert(FILE);
+
+        // Step 3: Analyze permissions (executable vs non-executable)
+        let is_executable = analyze_permissions(path, &metadata);
+        if is_executable {
+            tags.insert(EXECUTABLE);
+        } else {
+            tags.insert(NON_EXECUTABLE);
+        }
+
+        // Step 4: Analyze filename and potentially shebang (with custom config)
+        let filename_and_shebang_tags = self.analyze_filename_and_shebang_configured(path, is_executable);
+        tags.extend(filename_and_shebang_tags);
+
+        // Step 5: Analyze content encoding (text vs binary) if not skipped and not already determined
+        if !self.skip_content_analysis {
+            let encoding_tags = analyze_content_encoding(path, &tags)?;
+            tags.extend(encoding_tags);
+        }
+
+        Ok(tags)
+    }
+
+    fn analyze_filename_and_shebang_configured<P: AsRef<Path>>(&self, path: P, is_executable: bool) -> TagSet {
+        let path = path.as_ref();
+        let mut tags = TagSet::new();
+        
+        // Check filename-based tags first (including custom extensions)
+        if let Some(filename) = path.file_name().and_then(|n| n.to_str()) {
+            // Check custom extensions first if provided
+            if let Some(custom_exts) = &self.custom_extensions {
+                if let Some(ext) = Path::new(filename).extension().and_then(|e| e.to_str()) {
+                    let ext_lower = ext.to_lowercase();
+                    if let Some(ext_tags) = custom_exts.get(&ext_lower) {
+                        tags.extend(ext_tags.iter().cloned());
+                        return tags; // Custom extension takes precedence
+                    }
+                }
+            }
+            
+            // Fall back to standard filename analysis
+            let filename_tags = tags_from_filename(filename);
+            if !filename_tags.is_empty() {
+                tags.extend(filename_tags);
+            } else if is_executable && !self.skip_shebang_analysis {
+                // Parse shebang for executable files without recognized extensions
+                if let Ok(shebang_components) = parse_shebang_from_file(path) {
+                    if !shebang_components.is_empty() {
+                        let interpreter_tags = tags_from_interpreter(&shebang_components[0]);
+                        tags.extend(interpreter_tags);
+                    }
+                }
+            }
+        }
+        
+        tags
+    }
+}
 
 /// Result type for file identification operations.
 ///
 /// This is a convenience type alias for operations that may fail with
 /// file system or parsing errors.
-pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+pub type Result<T> = std::result::Result<T, IdentifyError>;
 
 /// Errors that can occur during file identification.
-#[derive(Debug)]
+#[derive(thiserror::Error, Debug)]
 pub enum IdentifyError {
     /// The specified path does not exist on the filesystem.
-    PathNotFound(String),
+    #[error("{path} does not exist.")]
+    PathNotFound { path: String },
+    
     /// An I/O error occurred while accessing the file.
-    IoError(std::io::Error),
+    #[error("IO error: {source}")]
+    IoError {
+        #[from]
+        source: std::io::Error,
+    },
+    
+    /// The file path contains invalid UTF-8 sequences.
+    #[error("Path contains invalid UTF-8: {path}")]
+    InvalidPath { path: String },
+    
+    /// The file content is not valid UTF-8 when UTF-8 is expected.
+    #[error("File contains invalid UTF-8 content")]
+    InvalidUtf8,
 }
 
-impl std::fmt::Display for IdentifyError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            IdentifyError::PathNotFound(path) => write!(f, "{path} does not exist."),
-            IdentifyError::IoError(err) => write!(f, "IO error: {err}"),
+/// Analyze file system metadata to determine basic file type.
+///
+/// Returns tags for directory, symlink, socket, or file based on metadata.
+/// This is the first step in file identification.
+fn analyze_file_type(metadata: &std::fs::Metadata) -> Option<TagSet> {
+    let file_type = metadata.file_type();
+    
+    if file_type.is_dir() {
+        return Some([DIRECTORY].iter().cloned().collect());
+    }
+    if file_type.is_symlink() {
+        return Some([SYMLINK].iter().cloned().collect());
+    }
+
+    // Check for socket (Unix-specific)
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::FileTypeExt;
+        if file_type.is_socket() {
+            return Some([SOCKET].iter().cloned().collect());
         }
     }
+    
+    // Regular file - continue with further analysis
+    None
 }
 
-impl std::error::Error for IdentifyError {}
-
-impl From<std::io::Error> for IdentifyError {
-    fn from(err: std::io::Error) -> Self {
-        IdentifyError::IoError(err)
+/// Analyze file permissions to determine executable status.
+///
+/// Returns true if the file is executable, false otherwise.
+/// On Unix systems, checks permission bits. On other systems, checks file extension.
+fn analyze_permissions<P: AsRef<Path>>(path: P, metadata: &std::fs::Metadata) -> bool {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = path; // Suppress unused warning on Unix
+        metadata.permissions().mode() & 0o111 != 0
     }
+    #[cfg(not(unix))]
+    {
+        // On non-Unix systems, check file extension for common executables
+        let _ = metadata; // Suppress unused warning on non-Unix
+        let path = path.as_ref();
+        path.extension()
+            .and_then(|ext| ext.to_str())
+            .map(|ext| matches!(ext.to_lowercase().as_str(), "exe" | "bat" | "cmd"))
+            .unwrap_or(false)
+    }
+}
+
+/// Analyze filename and potentially shebang for file type identification.
+///
+/// First tries filename-based identification. If that fails and the file is executable,
+/// falls back to shebang analysis.
+fn analyze_filename_and_shebang<P: AsRef<Path>>(path: P, is_executable: bool) -> TagSet {
+    let path = path.as_ref();
+    let mut tags = TagSet::new();
+    
+    // Check filename-based tags first
+    if let Some(filename) = path.file_name().and_then(|n| n.to_str()) {
+        let filename_tags = tags_from_filename(filename);
+        if !filename_tags.is_empty() {
+            tags.extend(filename_tags);
+        } else if is_executable {
+            // Parse shebang for executable files without recognized extensions
+            if let Ok(shebang_components) = parse_shebang_from_file(path) {
+                if !shebang_components.is_empty() {
+                    let interpreter_tags = tags_from_interpreter(&shebang_components[0]);
+                    tags.extend(interpreter_tags);
+                }
+            }
+        }
+    }
+    
+    tags
+}
+
+/// Analyze file content to determine encoding (text vs binary).
+///
+/// Only performs analysis if encoding tags are not already present.
+fn analyze_content_encoding<P: AsRef<Path>>(path: P, existing_tags: &TagSet) -> Result<TagSet> {
+    let mut tags = TagSet::new();
+    
+    // Check if we need to determine binary vs text
+    if !existing_tags.iter().any(|tag| ENCODING_TAGS.contains(tag)) {
+        if file_is_text(path)? {
+            tags.insert(TEXT);
+        } else {
+            tags.insert(BINARY);
+        }
+    }
+    
+    Ok(tags)
 }
 
 /// Identify a file from its filesystem path.
@@ -134,76 +497,36 @@ pub fn tags_from_path<P: AsRef<Path>>(path: P) -> Result<TagSet> {
     let path = path.as_ref();
     let path_str = path.to_string_lossy();
 
+    // Get file metadata
     let metadata = match fs::symlink_metadata(path) {
         Ok(meta) => meta,
-        Err(_) => return Err(Box::new(IdentifyError::PathNotFound(path_str.to_string()))),
+        Err(_) => return Err(IdentifyError::PathNotFound { path: path_str.to_string() }),
     };
 
-    let file_type = metadata.file_type();
-
-    if file_type.is_dir() {
-        return Ok([DIRECTORY].iter().cloned().collect());
-    }
-    if file_type.is_symlink() {
-        return Ok([SYMLINK].iter().cloned().collect());
+    // Step 1: Check for non-regular file types (directory, symlink, socket)
+    if let Some(file_type_tags) = analyze_file_type(&metadata) {
+        return Ok(file_type_tags);
     }
 
-    // Check for socket (Unix-specific)
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::FileTypeExt;
-        if file_type.is_socket() {
-            return Ok([SOCKET].iter().cloned().collect());
-        }
-    }
-
+    // Step 2: This is a regular file - start building tag set
     let mut tags = TagSet::new();
     tags.insert(FILE);
 
-    // Check if executable
-    let is_executable = {
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            metadata.permissions().mode() & 0o111 != 0
-        }
-        #[cfg(not(unix))]
-        {
-            // On non-Unix systems, check file extension for common executables
-            path.extension()
-                .and_then(|ext| ext.to_str())
-                .map(|ext| matches!(ext.to_lowercase().as_str(), "exe" | "bat" | "cmd"))
-                .unwrap_or(false)
-        }
-    };
-
+    // Step 3: Analyze permissions (executable vs non-executable)
+    let is_executable = analyze_permissions(path, &metadata);
     if is_executable {
         tags.insert(EXECUTABLE);
     } else {
         tags.insert(NON_EXECUTABLE);
     }
 
-    // Check filename-based tags
-    if let Some(filename) = path.file_name().and_then(|n| n.to_str()) {
-        let filename_tags = tags_from_filename(filename);
-        if !filename_tags.is_empty() {
-            tags.extend(filename_tags);
-        } else if is_executable {
-            // Parse shebang for executable files without recognized extensions
-            if let Ok(shebang_tags) = parse_shebang_from_file(path) {
-                tags.extend(shebang_tags);
-            }
-        }
-    }
+    // Step 4: Analyze filename and potentially shebang
+    let filename_and_shebang_tags = analyze_filename_and_shebang(path, is_executable);
+    tags.extend(filename_and_shebang_tags);
 
-    // Check if we need to determine binary vs text
-    if !tags.iter().any(|tag| ENCODING_TAGS.contains(tag)) {
-        if file_is_text(path)? {
-            tags.insert(TEXT);
-        } else {
-            tags.insert(BINARY);
-        }
-    }
+    // Step 5: Analyze content encoding (text vs binary) if not already determined
+    let encoding_tags = analyze_content_encoding(path, &tags)?;
+    tags.extend(encoding_tags);
 
     Ok(tags)
 }
@@ -243,8 +566,9 @@ pub fn tags_from_filename(filename: &str) -> TagSet {
 
     // Check exact filename matches first
     for part in std::iter::once(filename).chain(filename.split('.')) {
-        if let Some(name_tags) = NAMES.get(part) {
-            tags.extend(name_tags.iter().cloned());
+        let name_tags = get_name_tags(part);
+        if !name_tags.is_empty() {
+            tags.extend(name_tags);
             break;
         }
     }
@@ -253,10 +577,14 @@ pub fn tags_from_filename(filename: &str) -> TagSet {
     if let Some(ext) = Path::new(filename).extension().and_then(|e| e.to_str()) {
         let ext_lower = ext.to_lowercase();
 
-        if let Some(ext_tags) = EXTENSIONS.get(ext_lower.as_str()) {
-            tags.extend(ext_tags.iter().cloned());
-        } else if let Some(ext_tags) = EXTENSIONS_NEED_BINARY_CHECK.get(ext_lower.as_str()) {
-            tags.extend(ext_tags.iter().cloned());
+        let ext_tags = get_extension_tags(&ext_lower);
+        if !ext_tags.is_empty() {
+            tags.extend(ext_tags);
+        } else {
+            let binary_check_tags = get_extensions_need_binary_check_tags(&ext_lower);
+            if !binary_check_tags.is_empty() {
+                tags.extend(binary_check_tags);
+            }
         }
     }
 
@@ -301,8 +629,9 @@ pub fn tags_from_interpreter(interpreter: &str) -> TagSet {
     // Try progressively shorter versions (e.g., "python3.5.2" -> "python3.5" -> "python3")
     let mut current = interpreter_name;
     while !current.is_empty() {
-        if let Some(tags) = INTERPRETERS.get(current) {
-            return tags.clone();
+        let tags = get_interpreter_tags(current);
+        if !tags.is_empty() {
+            return tags;
         }
 
         // Try removing the last dot-separated part
@@ -398,10 +727,11 @@ pub fn is_text<R: Read>(mut reader: R) -> Result<bool> {
     Ok(is_text)
 }
 
-/// Parse shebang line from an executable file and return interpreter tags.
+/// Parse shebang line from an executable file and return raw shebang components.
 ///
 /// This function reads the first line of an executable file to extract
-/// shebang information and determine the script interpreter.
+/// shebang information and return the raw command components, similar to 
+/// Python's identify.parse_shebang_from_file().
 ///
 /// # Arguments
 ///
@@ -409,11 +739,9 @@ pub fn is_text<R: Read>(mut reader: R) -> Result<bool> {
 ///
 /// # Returns
 ///
-/// A set of tags for the interpreter found in the shebang line.
-/// Returns an empty set if:
+/// A vector of raw shebang components. Returns an empty vector if:
 /// - The file is not executable
 /// - No shebang is found
-/// - The interpreter is not recognized
 ///
 /// # Errors
 ///
@@ -433,10 +761,10 @@ pub fn is_text<R: Read>(mut reader: R) -> Result<bool> {
 /// # let mut perms = fs::metadata(&script_path).unwrap().permissions();
 /// # perms.set_mode(0o755);
 /// # fs::set_permissions(&script_path, perms).unwrap();
-/// let tags = parse_shebang_from_file(&script_path).unwrap();
-/// assert!(tags.contains("python"));
+/// let shebang = parse_shebang_from_file(&script_path).unwrap();
+/// assert_eq!(shebang.get(0).unwrap(), "python3");
 /// ```
-pub fn parse_shebang_from_file<P: AsRef<Path>>(path: P) -> Result<TagSet> {
+pub fn parse_shebang_from_file<P: AsRef<Path>>(path: P) -> Result<ShebangTuple> {
     let path = path.as_ref();
 
     // Only check executable files
@@ -445,7 +773,7 @@ pub fn parse_shebang_from_file<P: AsRef<Path>>(path: P) -> Result<TagSet> {
     {
         use std::os::unix::fs::PermissionsExt;
         if metadata.permissions().mode() & 0o111 == 0 {
-            return Ok(TagSet::new());
+            return Ok(ShebangTuple::new());
         }
     }
 
@@ -453,10 +781,11 @@ pub fn parse_shebang_from_file<P: AsRef<Path>>(path: P) -> Result<TagSet> {
     parse_shebang(file)
 }
 
-/// Parse a shebang line from a reader and return interpreter tags.
+/// Parse a shebang line from a reader and return raw shebang components.
 ///
 /// This function reads the first line from the provided reader and parses
-/// it as a shebang line to determine the script interpreter.
+/// it as a shebang line to extract raw command components, similar to
+/// Python's identify.parse_shebang().
 ///
 /// # Arguments
 ///
@@ -464,8 +793,7 @@ pub fn parse_shebang_from_file<P: AsRef<Path>>(path: P) -> Result<TagSet> {
 ///
 /// # Returns
 ///
-/// A set of tags for the interpreter found in the shebang line.
-/// Returns an empty set if no valid shebang is found.
+/// A vector of raw shebang components. Returns an empty vector if no valid shebang is found.
 ///
 /// # Examples
 ///
@@ -474,49 +802,91 @@ pub fn parse_shebang_from_file<P: AsRef<Path>>(path: P) -> Result<TagSet> {
 /// use std::io::Cursor;
 ///
 /// let shebang = Cursor::new(b"#!/usr/bin/env python3\nprint('hello')");
-/// let tags = parse_shebang(shebang).unwrap();
-/// assert!(tags.contains("python"));
-/// assert!(tags.contains("python3"));
+/// let components = parse_shebang(shebang).unwrap();
+/// assert_eq!(components.get(0).unwrap(), "python3");
 ///
 /// let no_shebang = Cursor::new(b"print('hello')");
-/// let tags = parse_shebang(no_shebang).unwrap();
-/// assert!(tags.is_empty());
+/// let components = parse_shebang(no_shebang).unwrap();
+/// assert!(components.is_empty());
 /// ```
-pub fn parse_shebang<R: Read>(reader: R) -> Result<TagSet> {
+pub fn parse_shebang<R: Read>(reader: R) -> Result<ShebangTuple> {
+    use std::io::BufRead;
+    
     let mut buf_reader = BufReader::new(reader);
-    let mut first_line = String::new();
-    buf_reader.read_line(&mut first_line)?;
-
-    if !first_line.starts_with("#!") {
-        return Ok(TagSet::new());
+    
+    // Read first line efficiently using read_until
+    let mut first_line_bytes = Vec::new();
+    match buf_reader.read_until(b'\n', &mut first_line_bytes) {
+        Ok(0) => return Ok(ShebangTuple::new()), // EOF with no data
+        Ok(_) => {
+            // Remove trailing newline if present
+            if first_line_bytes.ends_with(&[b'\n']) {
+                first_line_bytes.pop();
+            }
+            // Also handle \r\n line endings
+            if first_line_bytes.ends_with(&[b'\r']) {
+                first_line_bytes.pop();
+            }
+        }
+        Err(_) => return Ok(ShebangTuple::new()), // Read error
     }
+    
+    // Check if starts with shebang
+    if first_line_bytes.len() < 2 || &first_line_bytes[0..2] != b"#!" {
+        return Ok(ShebangTuple::new());
+    }
+    
+    // Limit line length to prevent memory issues
+    if first_line_bytes.len() > 1024 {
+        first_line_bytes.truncate(1024);
+    }
+
+    // Try to decode as UTF-8, return empty if invalid (like Python does)
+    let first_line = match String::from_utf8(first_line_bytes) {
+        Ok(line) => line,
+        Err(_) => return Ok(ShebangTuple::new()),
+    };
 
     // Remove the #! and clean up the line
     let shebang_line = first_line[2..].trim();
 
-    // Parse the shebang command
-    let parts: Vec<&str> = shebang_line.split_whitespace().collect();
-    if parts.is_empty() {
-        return Ok(TagSet::new());
+    // Check for only printable ASCII (like Python does)
+    for c in shebang_line.chars() {
+        if !c.is_ascii() || (c.is_control() && c != '\t') {
+            return Ok(ShebangTuple::new());
+        }
     }
 
-    let cmd = if parts.len() >= 2 && parts[0] == "/usr/bin/env" {
-        if parts[1] == "-S" && parts.len() > 2 {
-            &parts[2..]
+    // Parse the shebang command using simple split (like Python's shlex fallback)
+    let parts: smallvec::SmallVec<[&str; 4]> = shebang_line.split_whitespace().collect();
+    if parts.is_empty() {
+        return Ok(ShebangTuple::new());
+    }
+
+    let cmd: smallvec::SmallVec<[&str; 2]> = if parts[0] == "/usr/bin/env" {
+        if parts.len() == 1 {
+            // Just "#!/usr/bin/env" with no interpreter
+            smallvec::SmallVec::new()
+        } else if parts.len() >= 2 && parts[1] == "-S" {
+            if parts.len() > 2 {
+                parts[2..].iter().copied().collect()
+            } else {
+                // Just "#!/usr/bin/env -S" with no interpreter
+                smallvec::SmallVec::new()
+            }
         } else {
-            &parts[1..]
+            parts[1..].iter().copied().collect()
         }
     } else {
-        &parts
+        parts.iter().copied().collect()
     };
 
     if cmd.is_empty() {
-        return Ok(TagSet::new());
+        return Ok(ShebangTuple::new());
     }
 
-    // Extract interpreter name and get tags
-    let interpreter = cmd[0].split('/').next_back().unwrap_or(cmd[0]);
-    Ok(tags_from_interpreter(interpreter))
+    // Return the raw command components as strings
+    Ok(ShebangTuple::from_vec(cmd.iter().map(|s| s.to_string()).collect()))
 }
 
 #[cfg(test)]
@@ -526,6 +896,16 @@ mod tests {
     use std::io::Cursor;
     use std::os::unix::fs::PermissionsExt;
     use tempfile::{NamedTempFile, tempdir};
+
+    // Helper macro to create ShebangTuple from string slices for testing
+    macro_rules! shebang_tuple {
+        () => {
+            ShebangTuple::new()
+        };
+        ($($item:expr),+) => {
+            ShebangTuple::from_vec(vec![$($item.to_string()),+])
+        };
+    }
 
     // Test tag system completeness
     #[test]
@@ -661,43 +1041,42 @@ mod tests {
     // Test parse_shebang function
     #[test]
     fn test_parse_shebang_basic() {
-        let tags = parse_shebang(Cursor::new(b"#!/usr/bin/python")).unwrap();
-        assert!(tags.contains("python"));
+        let components = parse_shebang(Cursor::new(b"#!/usr/bin/python")).unwrap();
+        assert_eq!(components, shebang_tuple!["/usr/bin/python"]);
 
-        let tags = parse_shebang(Cursor::new(b"#!/usr/bin/env python")).unwrap();
-        assert!(tags.contains("python"));
+        let components = parse_shebang(Cursor::new(b"#!/usr/bin/env python")).unwrap();
+        assert_eq!(components, shebang_tuple!["python"]);
     }
 
     #[test]
     fn test_parse_shebang_env_with_flags() {
-        let tags = parse_shebang(Cursor::new(b"#!/usr/bin/env -S python -u")).unwrap();
-        assert!(tags.contains("python"));
+        let components = parse_shebang(Cursor::new(b"#!/usr/bin/env -S python -u")).unwrap();
+        assert_eq!(components, shebang_tuple!["python", "-u"]);
     }
 
     #[test]
     fn test_parse_shebang_spaces() {
-        let tags = parse_shebang(Cursor::new(b"#! /usr/bin/python")).unwrap();
-        assert!(tags.contains("python"));
+        let components = parse_shebang(Cursor::new(b"#! /usr/bin/python")).unwrap();
+        assert_eq!(components, shebang_tuple!["/usr/bin/python"]);
 
-        let tags = parse_shebang(Cursor::new(b"#!/usr/bin/foo  python")).unwrap();
-        // Should get first interpreter
-        assert!(tags.is_empty()); // "foo" is not recognized
+        let components = parse_shebang(Cursor::new(b"#!/usr/bin/foo  python")).unwrap();
+        assert_eq!(components, shebang_tuple!["/usr/bin/foo", "python"]);
     }
 
     #[test]
     fn test_parse_shebang_no_shebang() {
-        let tags = parse_shebang(Cursor::new(b"import sys")).unwrap();
-        assert!(tags.is_empty());
+        let components = parse_shebang(Cursor::new(b"import sys")).unwrap();
+        assert!(components.is_empty());
 
-        let tags = parse_shebang(Cursor::new(b"")).unwrap();
-        assert!(tags.is_empty());
+        let components = parse_shebang(Cursor::new(b"")).unwrap();
+        assert!(components.is_empty());
     }
 
     #[test]
     fn test_parse_shebang_invalid_utf8() {
         let result = parse_shebang(Cursor::new(&[0x23, 0x21, 0xf9, 0x93, 0x01, 0x42, 0xcd]));
         match result {
-            Ok(tags) => assert!(tags.is_empty()),
+            Ok(components) => assert!(components.is_empty()),
             Err(_) => (), // I/O errors are acceptable for invalid UTF-8 data
         }
     }
@@ -835,6 +1214,95 @@ mod tests {
         assert!(tags.contains("gzip"));
     }
 
+    // Test FileIdentifier builder pattern
+    #[test]
+    fn test_file_identifier_default() {
+        let dir = tempdir().unwrap();
+        let py_file = dir.path().join("test.py");
+        fs::write(&py_file, "print('hello')").unwrap();
+
+        let identifier = FileIdentifier::new();
+        let tags = identifier.identify(&py_file).unwrap();
+        
+        assert!(tags.contains("file"));
+        assert!(tags.contains("python"));
+        assert!(tags.contains("text"));
+        assert!(tags.contains("non-executable"));
+    }
+
+    #[test]
+    fn test_file_identifier_skip_content_analysis() {
+        let dir = tempdir().unwrap();
+        let unknown_file = dir.path().join("unknown_file");
+        fs::write(&unknown_file, "some content").unwrap();
+
+        let identifier = FileIdentifier::new().skip_content_analysis();
+        let tags = identifier.identify(&unknown_file).unwrap();
+        
+        assert!(tags.contains("file"));
+        assert!(tags.contains("non-executable"));
+        // Should not have text or binary tags since content analysis was skipped
+        assert!(!tags.contains("text"));
+        assert!(!tags.contains("binary"));
+    }
+
+    #[test]
+    fn test_file_identifier_skip_shebang_analysis() {
+        let dir = tempdir().unwrap();
+        let script_file = dir.path().join("script");
+        fs::write(&script_file, "#!/usr/bin/env python3\nprint('hello')").unwrap();
+        
+        let mut perms = fs::metadata(&script_file).unwrap().permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&script_file, perms).unwrap();
+
+        let identifier = FileIdentifier::new().skip_shebang_analysis();
+        let tags = identifier.identify(&script_file).unwrap();
+        
+        assert!(tags.contains("file"));
+        assert!(tags.contains("executable"));
+        // Should not have python tags since shebang analysis was skipped
+        // and filename doesn't match any patterns
+        assert!(!tags.contains("python"));
+    }
+
+    #[test]
+    fn test_file_identifier_custom_extensions() {
+        let dir = tempdir().unwrap();
+        let custom_file = dir.path().join("test.myext");
+        fs::write(&custom_file, "custom content").unwrap();
+
+        let mut custom_extensions = std::collections::HashMap::new();
+        custom_extensions.insert("myext".to_string(), HashSet::from(["custom", "text"]));
+
+        let identifier = FileIdentifier::new()
+            .with_custom_extensions(custom_extensions);
+        let tags = identifier.identify(&custom_file).unwrap();
+        
+        assert!(tags.contains("file"));
+        assert!(tags.contains("custom"));
+        assert!(tags.contains("text"));
+        assert!(tags.contains("non-executable"));
+    }
+
+    #[test]
+    fn test_file_identifier_chaining() {
+        let dir = tempdir().unwrap();
+        let test_file = dir.path().join("test.unknown");
+        fs::write(&test_file, "content").unwrap();
+
+        let identifier = FileIdentifier::new()
+            .skip_content_analysis()
+            .skip_shebang_analysis();
+        let tags = identifier.identify(&test_file).unwrap();
+        
+        assert!(tags.contains("file"));
+        assert!(tags.contains("non-executable"));
+        // Should have minimal tags due to skipping analyses
+        assert!(!tags.contains("text"));
+        assert!(!tags.contains("binary"));
+    }
+
     // Additional comprehensive tests from Python version
     #[test]
     fn test_comprehensive_shebang_parsing() {
@@ -849,10 +1317,26 @@ mod tests {
             ("#!/usr/bin/env -S", vec![]),
         ];
 
-        for (input, expected) in test_cases {
-            let tags = parse_shebang(Cursor::new(input.as_bytes())).unwrap();
-            let expected_set: TagSet = expected.iter().cloned().collect();
-            assert_eq!(tags, expected_set, "Failed for input: '{}'", input);
+        for (input, _expected) in test_cases {
+            let components = parse_shebang(Cursor::new(input.as_bytes())).unwrap();
+            
+            match input {
+                "" => assert!(components.is_empty()),
+                "#!/usr/bin/python" => assert_eq!(components, shebang_tuple!["/usr/bin/python"]),
+                "#!/usr/bin/env python" => assert_eq!(components, shebang_tuple!["python"]),
+                "#! /usr/bin/python" => assert_eq!(components, shebang_tuple!["/usr/bin/python"]),
+                "#!/usr/bin/foo  python" => assert_eq!(components, shebang_tuple!["/usr/bin/foo", "python"]),
+                "#!/usr/bin/env -S python -u" => assert_eq!(components, shebang_tuple!["python", "-u"]),
+                "#!/usr/bin/env" => {
+                    // This should be empty since no interpreter specified
+                    assert!(components.is_empty(), "Got components: {:?} for input: '{}'", components, input);
+                },
+                "#!/usr/bin/env -S" => {
+                    // This should be empty since no interpreter after -S
+                    assert!(components.is_empty(), "Got components: {:?} for input: '{}'", components, input);
+                },
+                _ => {}
+            }
         }
     }
 
@@ -866,10 +1350,10 @@ mod tests {
         ];
 
         for input in invalid_utf8_cases {
-            // Should not panic, should return empty set for invalid UTF-8
+            // Should not panic, should return empty components for invalid UTF-8
             let result = parse_shebang(Cursor::new(input));
             match result {
-                Ok(tags) => assert!(tags.is_empty()),
+                Ok(components) => assert!(components.is_empty()),
                 Err(_) => (), // I/O errors are acceptable for invalid data
             }
         }

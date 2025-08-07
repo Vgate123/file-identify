@@ -1,12 +1,22 @@
 use file_identify::{
     file_is_text, parse_shebang_from_file, tags_from_filename, tags_from_interpreter,
-    tags_from_path,
+    tags_from_path, ShebangTuple,
 };
 use std::collections::HashSet;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::os::unix::net::UnixListener;
 use tempfile::tempdir;
+
+// Helper macro to create ShebangTuple from string slices for testing
+macro_rules! shebang_tuple {
+    () => {
+        ShebangTuple::new()
+    };
+    ($($item:expr),+) => {
+        ShebangTuple::from_vec(vec![$($item.to_string()),+])
+    };
+}
 
 #[test]
 fn test_comprehensive_file_scenarios() {
@@ -177,7 +187,11 @@ fn test_shebang_with_arguments() {
     perms.set_mode(0o755);
     fs::set_permissions(&script_path, perms).unwrap();
 
-    let tags = parse_shebang_from_file(&script_path).unwrap();
+    let components = parse_shebang_from_file(&script_path).unwrap();
+    assert_eq!(components, shebang_tuple!["python3", "-u"]);
+    
+    // Test that the first component converts to expected tags
+    let tags = tags_from_interpreter(&components[0]);
     assert!(tags.contains("python"));
     assert!(tags.contains("python3"));
 }
@@ -189,8 +203,8 @@ fn test_non_executable_shebang_ignored() {
     fs::write(&script_path, "#!/usr/bin/env python3\nprint('hello')").unwrap();
     // Don't make it executable
 
-    let tags = parse_shebang_from_file(&script_path).unwrap();
-    assert!(tags.is_empty()); // Should be empty for non-executable files
+    let components = parse_shebang_from_file(&script_path).unwrap();
+    assert!(components.is_empty()); // Should be empty for non-executable files
 }
 
 #[test]

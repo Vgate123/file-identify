@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2025-08-08
+
+### Changed
+- **Performance**: Replaced HashMap with Perfect Hash Functions (PHF) for compile-time optimization
+- **Memory**: Eliminated lazy initialization overhead with static data structures  
+- **Binary size**: Optimized with PHF compile-time hash generation
+- **Startup**: Zero runtime hash computation for all file type lookups
+
+### Technical Details
+- Converted 315+ file extension mappings to PHF
+- Converted 22 interpreter mappings to PHF  
+- Converted 130+ special filename mappings to PHF
+- Maintained 100% API compatibility and functionality
+- All 73 tests continue to pass with identical behavior
+
 ## [0.1.0] - 2025-08-07
 
 ### Added

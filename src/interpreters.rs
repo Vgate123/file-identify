@@ -1,33 +1,37 @@
-use crate::tags::TagSet;
-use std::collections::{HashMap, HashSet};
+use crate::tags::{TagSet, tags_from_array};
+use phf::phf_map;
 
-lazy_static::lazy_static! {
-    pub static ref INTERPRETERS: HashMap<&'static str, TagSet> = {
-        let mut map = HashMap::new();
+// Interpreter mappings using Perfect Hash Functions for compile-time optimization.
 
-        map.insert("ash", HashSet::from(["shell", "ash"]));
-        map.insert("awk", HashSet::from(["awk"]));
-        map.insert("bash", HashSet::from(["shell", "bash"]));
-        map.insert("bats", HashSet::from(["shell", "bash", "bats"]));
-        map.insert("cbsd", HashSet::from(["shell", "cbsd"]));
-        map.insert("csh", HashSet::from(["shell", "csh"]));
-        map.insert("dash", HashSet::from(["shell", "dash"]));
-        map.insert("expect", HashSet::from(["expect"]));
-        map.insert("ksh", HashSet::from(["shell", "ksh"]));
-        map.insert("node", HashSet::from(["javascript"]));
-        map.insert("nodejs", HashSet::from(["javascript"]));
-        map.insert("perl", HashSet::from(["perl"]));
-        map.insert("php", HashSet::from(["php"]));
-        map.insert("php7", HashSet::from(["php", "php7"]));
-        map.insert("php8", HashSet::from(["php", "php8"]));
-        map.insert("python", HashSet::from(["python"]));
-        map.insert("python2", HashSet::from(["python", "python2"]));
-        map.insert("python3", HashSet::from(["python", "python3"]));
-        map.insert("ruby", HashSet::from(["ruby"]));
-        map.insert("sh", HashSet::from(["shell", "sh"]));
-        map.insert("tcsh", HashSet::from(["shell", "tcsh"]));
-        map.insert("zsh", HashSet::from(["shell", "zsh"]));
+static INTERPRETER_TAGS: phf::Map<&'static str, &'static [&'static str]> = phf_map! {
+    "ash" => &["shell", "ash"],
+    "awk" => &["awk"],
+    "bash" => &["shell", "bash"],
+    "bats" => &["shell", "bash", "bats"],
+    "cbsd" => &["shell", "cbsd"],
+    "csh" => &["shell", "csh"],
+    "dash" => &["shell", "dash"],
+    "expect" => &["expect"],
+    "ksh" => &["shell", "ksh"],
+    "node" => &["javascript"],
+    "nodejs" => &["javascript"],
+    "perl" => &["perl"],
+    "php" => &["php"],
+    "php7" => &["php", "php7"],
+    "php8" => &["php", "php8"],
+    "python" => &["python"],
+    "python2" => &["python", "python2"],
+    "python3" => &["python", "python3"],
+    "ruby" => &["ruby"],
+    "sh" => &["shell", "sh"],
+    "tcsh" => &["shell", "tcsh"],
+    "zsh" => &["shell", "zsh"],
+};
 
-        map
-    };
+/// Get tags for a given interpreter using compile-time optimized lookup.
+pub fn get_interpreter_tags(interpreter: &str) -> TagSet {
+    INTERPRETER_TAGS
+        .get(interpreter)
+        .map(|&tags| tags_from_array(tags))
+        .unwrap_or_default()
 }

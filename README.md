@@ -13,10 +13,12 @@ This is a Rust port of the Python [identify](https://github.com/pre-commit/ident
 
 ## Features
 
-- 🚀 **Fast**: Built in Rust for maximum performance
-- 📁 **Comprehensive**: Identifies 100+ file types and formats
+- 🚀 **Fast**: Built in Rust with Perfect Hash Functions (PHF) for compile-time optimization
+- 📁 **Comprehensive**: Identifies 315+ file types and formats
 - 🔍 **Smart detection**: Uses file extensions, content analysis, and shebang parsing
 - 📦 **Library + CLI**: Use as a Rust library or command-line tool
+- ⚡ **Zero overhead**: PHF provides O(1) lookups with no runtime hash computation
+- 🎯 **Memory efficient**: Static data structures with no lazy initialization
 - ✅ **Well-tested**: Extensive test suite ensuring reliability
 
 ## Installation
